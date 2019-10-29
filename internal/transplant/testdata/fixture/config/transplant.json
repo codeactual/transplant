@@ -1,0 +1,49 @@
+{
+  "Template": {
+    "origin_filepath": "{{._config_dir}}",
+    "copy_filepath": "{{._config_dir}}/../../../testdata/dynamic",
+    "copy_importpath": "copy.tld/user/proj"
+  },
+  "Ops": {
+    "operation_id": {
+      "From": {
+        "ModuleFilePath": "{{.origin_filepath}}/operation_id/origin",
+        "LocalFilePath": "local",
+        "CopyOnlyFilePath": {
+          "Include": [
+            "bin/*"
+          ]
+        },
+        "RenameFilePath": [
+          {
+            "Old": "old1",
+            "New": "new1"
+          },
+          {
+            "Old": "old2",
+            "New": "new2"
+          }
+        ]
+      },
+      "To": {
+        "ModuleFilePath": "{{.copy_filepath}}",
+        "ModuleImportPath": "{{.copy_importpath}}"
+      },
+      "Dep": [
+        {
+          "From": {
+            "FilePath": "dep1",
+            "CopyOnlyFilePath": {
+              "Include": [
+                "bin/*"
+              ]
+            }
+          },
+          "To": {
+            "FilePath": "internal/dep1"
+          }
+        }
+      ]
+    }
+  }
+}

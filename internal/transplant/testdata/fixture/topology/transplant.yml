@@ -1,0 +1,208 @@
+Template:
+  origin_module_filepath: '{{._config_dir}}'
+  copy_module_filepath: '{{._config_dir}}/../../../testdata/dynamic'
+  copy_module_importpath: 'copy.tld/user/proj'
+# For more background on the topology contraints:
+# https://github.com/codeactual/transplant/blob/master/doc/config.md#topologies
+#
+# All fixtures under this file's directory share this config file in order to avoid one-config per case.
+# It makes it easier to add new cases, refactor the config structure, etc.
+# It also exercises the assumption that each operation definition is independent.
+Ops:
+  module_rooted_local_and_dep:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/module_rooted_local_and_dep/origin'
+    To:
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      ModuleImportPath: '{{.copy_module_importpath}}'
+    Dep:
+      - To:
+          FilePath: 'internal/dep1'
+  from_modulefilepath_empty:
+    To:
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      LocalFilePath: 'local'
+      ModuleImportPath: '{{.copy_module_importpath}}'
+    Dep:
+      - To:
+          FilePath: 'internal/dep1'
+  to_modulefilepath_empty:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/to_modulefilepath_empty/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+    Dep:
+      - To:
+          FilePath: 'internal/dep1'
+  to_moduleimportpath_empty:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/to_moduleimportpath_empty/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - To:
+          FilePath: 'internal/dep1'
+  local_dep_filepath_from_overlap:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/local_dep_filepath_from_overlap/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      ModuleImportPath: '{{.copy_module_importpath}}'
+    Dep:
+      - From:
+          FilePath: 'local/dep1'
+        To:
+          FilePath: 'internal/dep1'
+  local_dep_filepath_to_overlap_both_set:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/local_dep_filepath_to_overlap_both_set/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      LocalFilePath: 'conflict'
+      ModuleImportPath: '{{.copy_module_importpath}}'
+    Dep:
+      - From:
+          FilePath: 'internal'
+        To:
+          FilePath: 'conflict'
+  local_dep_filepath_to_overlap_both_emp:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/local_dep_filepath_to_overlap_both_emp/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      ModuleImportPath: '{{.copy_module_importpath}}'
+    Dep:
+      - From:
+          FilePath: 'internal'
+  dep_filepath_dupe:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/dep_filepath_dupe/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+  dep_filepath_overlap:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/dep_filepath_overlap/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      ModuleImportPath: '{{.copy_module_importpath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep1/subpkg'
+        To:
+          FilePath: 'internal/dep1/subpkg'
+  loc_under_dep/loc_from_set_to_emp/dep_from_emp_to_set:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/loc_under_dep/loc_from_set_to_emp/dep_from_emp_to_set/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - To:
+          FilePath: 'internal'
+  loc_under_dep/loc_from_set_to_emp/dep_from_set_to_set:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/loc_under_dep/loc_from_set_to_emp/dep_from_set_to_set/origin'
+      LocalFilePath: 'deps/local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'deps'
+        To:
+          FilePath: 'internal'
+  loc_under_dep/loc_from_set_to_set/dep_from_emp_to_set:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/loc_under_dep/loc_from_set_to_set/dep_from_emp_to_set/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      LocalFilePath: 'local'
+    Dep:
+      - To:
+          FilePath: 'internal'
+  loc_under_dep/loc_from_set_to_set/dep_from_emp_to_emp:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/loc_under_dep/loc_from_set_to_set/dep_from_emp_to_emp/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      LocalFilePath: 'local'
+    Dep:
+      - From:
+          FilePath: ''
+  loc_under_dep/loc_from_set_to_set/dep_from_set_to_set:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/loc_under_dep/loc_from_set_to_set/dep_from_set_to_set/origin'
+      LocalFilePath: 'deps/local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      LocalFilePath: 'local'
+    Dep:
+      - From:
+          FilePath: 'deps'
+        To:
+          FilePath: 'internal/deps'
+  loc_dep_non_moduleroot_siblings/loc_from_set_to_emp/dep_from_set_to_set:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/loc_dep_non_moduleroot_siblings/loc_from_set_to_emp/dep_from_set_to_set/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'deps'
+        To:
+          FilePath: 'internal'
+  loc_dep_non_moduleroot_siblings/loc_from_set_to_set/dep_from_set_to_set:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/loc_dep_non_moduleroot_siblings/loc_from_set_to_set/dep_from_set_to_set/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      LocalFilePath: 'local'
+    Dep:
+      - From:
+          FilePath: 'deps'
+        To:
+          FilePath: 'internal'
+  dotdot_in_relative_path:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/dotdot_in_relative_paths/origin'
+      LocalFilePath: '../local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      LocalFilePath: '../local'
+    Dep:
+      - From:
+          FilePath: '../deps'
+        To:
+          FilePath: '../internal'

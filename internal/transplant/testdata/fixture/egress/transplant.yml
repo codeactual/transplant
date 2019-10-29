@@ -1,0 +1,725 @@
+Template:
+  origin_module_filepath: '{{._config_dir}}'
+  copy_module_filepath: '{{._config_dir}}/../../../testdata/dynamic'
+  copy_module_importpath: 'copy.tld/user/proj'
+# All fixtures under this file's directory share this config file in order to avoid one-config per case.
+# It makes it easier to add new cases, refactor the config structure, etc.
+# It also exercises the assumption that each operation definition is independent.
+Ops:
+  dep_dirs:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/dep_dirs/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep2'
+        To:
+          FilePath: 'internal/dep2'
+  dep_export_use_across_multi_dep:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/dep_export_use_across_multi_dep/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep2'
+        To:
+          FilePath: 'internal/dep2'
+  dep_export_use_across_multi_local:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/dep_export_use_across_multi_local/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+  unused_dep:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/unused_dep/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'unused1'
+        To:
+          FilePath: 'internal/unused1'
+  dag_baseline:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/dag_baseline/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep2'
+        To:
+          FilePath: 'internal/dep2'
+      - From:
+          FilePath: 'dep3'
+        To:
+          FilePath: 'internal/dep3'
+  dep_use:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/dep_use/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep2'
+        To:
+          FilePath: 'internal/dep2'
+      - From:
+          FilePath: 'dep3'
+        To:
+          FilePath: 'internal/dep3'
+      - From:
+          FilePath: 'dep4'
+        To:
+          FilePath: 'internal/dep4'
+  copy_plan_pruned:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/copy_plan_pruned/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep2'
+        To:
+          FilePath: 'internal/dep2'
+      - From:
+          FilePath: 'dep3'
+        To:
+          FilePath: 'internal/dep3'
+      - From:
+          FilePath: 'dep4'
+        To:
+          FilePath: 'internal/dep_four'
+  copy_plan_dep_completely_pruned:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/copy_plan_dep_completely_pruned/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep_completely_pruned'
+        To:
+          FilePath: 'internal/dep_completely_pruned'
+  remove_baseline:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/remove_baseline/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+  comments_baseline:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/comments_baseline/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+  comments_pruned:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/comments_pruned/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+  gendecl_pruned:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/gendecl_pruned/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+  copy_non_go:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/copy_non_go/origin'
+      LocalFilePath: 'local'
+      CopyOnlyFilePath:
+        Include:
+          - '*.md'
+          - '.*'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+          CopyOnlyFilePath:
+            Include:
+              - '*.md'
+              - '.*'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'unused1'
+          CopyOnlyFilePath:
+            Include:
+              - '*.md'
+              - '.*'
+        To:
+          FilePath: 'internal/unused1'
+  init_baseline:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/init_baseline/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'unused1'
+        To:
+          FilePath: 'internal/unused1'
+      - From:
+          FilePath: 'only_used_by_dep1_init'
+          ReplaceString:
+            ImportPath:
+              Include:
+                - '**/*'
+        To:
+          FilePath: 'internal/only_used_by_dep1_init'
+      - From:
+          FilePath: 'only_used_by_unused1'
+        To:
+          FilePath: 'internal/only_used_by_unused1'
+  local_init_affects_pruning:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/local_init_affects_pruning/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+  init_chain:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/init_chain/origin'
+      LocalFilePath: 'local'
+      Tests: true
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      LocalFilePath: 'local'
+    Dep:
+      - From:
+          FilePath: 'internal'
+          Tests: true
+        To:
+          FilePath: 'internal'
+  init_multi_func:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/init_multi_func/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep2'
+        To:
+          FilePath: 'internal/dep2'
+      - From:
+          FilePath: 'dep3'
+        To:
+          FilePath: 'internal/dep3'
+  one_method_used_struct_pruning:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/one_method_used_struct_pruning/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep2'
+        To:
+          FilePath: 'internal/dep2'
+      - From:
+          FilePath: 'dep3'
+        To:
+          FilePath: 'internal/dep3'
+      - From:
+          FilePath: 'unused1'
+        To:
+          FilePath: 'internal/unused1'
+  type_used_alone_method_pruning:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/type_used_alone_method_pruning/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep2'
+        To:
+          FilePath: 'internal/dep2'
+      - From:
+          FilePath: 'dep3'
+        To:
+          FilePath: 'internal/dep3'
+      - From:
+          FilePath: 'unused1'
+        To:
+          FilePath: 'internal/unused1'
+  import_pruning_baseline:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/import_pruning_baseline/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep2'
+        To:
+          FilePath: 'internal/dep2'
+  blank_identifier_affects_pruning:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/blank_identifier_affects_pruning/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep2'
+        To:
+          FilePath: 'internal/dep2'
+  test_support_baseline:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/test_support_baseline/origin'
+      LocalFilePath: 'local'
+      Tests: true
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1_only_used_by_local_test_file'
+          Tests: true
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep2_only_used_by_dep1_test_file'
+          Tests: true
+        To:
+          FilePath: 'internal/dep2'
+      - From:
+          FilePath: 'dep3_only_used_by_dep2'
+          Tests: true
+        To:
+          FilePath: 'internal/dep3'
+      - From:
+          FilePath: 'dep4_unused'
+          Tests: true
+        To:
+          FilePath: 'internal/dep4'
+      - From:
+          FilePath: 'dep5_used_by_local_impl'
+          Tests: true
+        To:
+          FilePath: 'internal/dep5'
+      - From:
+          FilePath: 'dep6_only_used_by_dep4_test_file'
+          Tests: true
+        To:
+          FilePath: 'internal/dep6'
+      - From:
+          FilePath: 'dep7_only_used_by_dep2_test_file'
+          Tests: true
+        To:
+          FilePath: 'internal/dep7'
+  strings_rewritten_baseline:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/strings_rewritten_baseline/origin'
+      LocalFilePath: 'local'
+      GoFilePath:
+        Include:
+          - 'auto_detect'
+          - 'go_descendant'
+      CopyOnlyFilePath:
+        Include:
+          - 'copy_only/*.go'
+      GoDescendantFilePath:
+        Include:
+          - 'go_descendant/*/*.md'
+      ReplaceString:
+        ImportPath:
+          Include:
+            - '**/*'
+      Tests: true
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+          GoFilePath:
+            Include:
+              - 'auto_detect'
+              - 'go_descendant'
+          CopyOnlyFilePath:
+            Include:
+              - 'copy_only/*.go'
+          GoDescendantFilePath:
+            Include:
+              - 'go_descendant/*/*.md'
+          ReplaceString:
+            ImportPath:
+              Include:
+                - '**/*'
+          Tests: true
+        To:
+          FilePath: 'internal/dep1'
+  const_iota_pruning:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/const_iota_pruning/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+  filepath_config_baseline:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/filepath_config_baseline/origin'
+      LocalFilePath: 'local'
+      GoFilePath:
+        Exclude:
+          - '**/auto_exclude*'
+          - '**/auto_exclude*/**/*'
+      CopyOnlyFilePath:
+        Include:
+          - '**/fixture*'
+          - '**/fixture*/**/*'
+      ReplaceString:
+        ImportPath:
+          Include:
+            - '**/*'
+      Tests: true
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+          CopyOnlyFilePath:
+            Include:
+              - '**/fixture*'
+              - '**/fixture*/**/*'
+          ReplaceString:
+            ImportPath:
+              Include:
+                - '**/*'
+          Tests: true
+        To:
+          FilePath: 'internal/dep1'
+  rename_baseline:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/rename_baseline/origin'
+      LocalFilePath: 'local'
+      CopyOnlyFilePath:
+        Include:
+          - 'Makefile.standalone'
+      RenameFilePath:
+        - Old: 'local/Makefile.standalone'
+          New: 'Makefile'
+        - Old: 'local/other.go'
+          New: 'another.go'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+  godescendantfilepath_baseline:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/godescendantfilepath_baseline/origin'
+      LocalFilePath: 'local'
+      GoDescendantFilePath:
+        Include:
+          - 'local*/a'
+          - 'local*/a/**/*'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+          GoDescendantFilePath:
+            Include:
+              - 'a'
+              - 'a/**/*'
+        To:
+          FilePath: 'internal/dep1'
+      - From:
+          FilePath: 'dep2'
+          GoDescendantFilePath:
+            Include:
+              - 'a'
+              - 'a/**/*'
+        To:
+          FilePath: 'internal/dep2'
+  init_local_only_used_pkgs:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/init_local_only_used_pkgs/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'deps'
+        To:
+          FilePath: 'internal/deps'
+  copy_file_perm:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/copy_file_perm/origin'
+      LocalFilePath: 'local'
+      CopyOnlyFilePath:
+        Include:
+          - 'bin/*'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+          CopyOnlyFilePath:
+            Include:
+              - 'bin/*'
+        To:
+          FilePath: 'internal/dep1'
+  unconfigured_local_dirs:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/unconfigured_local_dirs/origin'
+      LocalFilePath: 'local'
+      GoFilePath:
+        Include:
+          - 'with_inclusion'
+          - 'with_inclusion/**/*'
+        Exclude:
+          - 'with_inclusion/auto_detect_exclusion'
+          - 'with_inclusion/auto_detect_exclusion/**/*'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+  unconfigured_dep_dirs:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/unconfigured_dep_dirs/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+          GoFilePath:
+            Exclude:
+              - 'auto_detect_exclusion'
+              - 'auto_detect_exclusion/**/*'
+        To:
+          FilePath: 'internal/dep1'
+  init_via_dep_tests:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/init_via_dep_tests/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'deps'
+          Tests: true
+        To:
+          FilePath: 'internal/deps'
+  rename_file_at_filepath_root:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/rename_file_at_filepath_root/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep_one'
+  copy_overwrite_minimal:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/copy_overwrite_minimal/origin'
+      LocalFilePath: 'local'
+      GoFilePath:
+        Include:
+          - 'auto_detect'
+          - 'go_descendant'
+      CopyOnlyFilePath:
+        Include:
+          - 'copy_only/*.go'
+      GoDescendantFilePath:
+        Include:
+          - 'go_descendant/*/*.md'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+          GoFilePath:
+            Include:
+              - 'auto_detect'
+              - 'go_descendant'
+          CopyOnlyFilePath:
+            Include:
+              - 'copy_only/*.go'
+          GoDescendantFilePath:
+            Include:
+              - 'go_descendant/*/*.md'
+        To:
+          FilePath: 'internal/dep1'
+  allowed_shadows_pruning_unaffected:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/allowed_shadows_pruning_unaffected/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+  dupe_import:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/dupe_import/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+        To:
+          FilePath: 'internal/dep1'
+  blank_import_support:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/blank_import_support/origin'
+      LocalFilePath: 'local'
+      Tests: true
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      LocalFilePath: 'local'
+    Dep:
+      - From:
+          FilePath: 'internal'
+          Tests: true
+        To:
+          FilePath: 'internal'
+  dot_import_support:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/dot_import_support/origin'
+      LocalFilePath: 'local'
+      Tests: true
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      LocalFilePath: 'local'
+    Dep:
+      - From:
+          FilePath: 'internal'
+          Tests: true
+        To:
+          FilePath: 'internal'

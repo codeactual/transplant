@@ -1,0 +1,41 @@
+[Template]
+  origin_filepath = "{{._config_dir}}"
+  copy_filepath = "{{._config_dir}}/../../../testdata/dynamic"
+  copy_importpath = "copy.tld/user/proj"
+
+[Ops]
+
+  [Ops.operation_id]
+
+    [Ops.operation_id.From]
+      ModuleFilePath = "{{.origin_filepath}}/operation_id/origin"
+      LocalFilePath = "local"
+
+      [Ops.operation_id.From.CopyOnlyFilePath]
+        Include = ["bin/*"]
+
+      [[Ops.operation_id.From.RenameFilePath]]
+        New = "new1"
+        Old = "old1"
+
+      [[Ops.operation_id.From.RenameFilePath]]
+        New = "new2"
+        Old = "old2"
+
+    [Ops.operation_id.To]
+      ModuleFilePath = "{{.copy_filepath}}"
+      ModuleImportPath = "{{.copy_importpath}}"
+
+    [[Ops.operation_id.Dep]]
+
+      [Ops.operation_id.Dep.From]
+        FilePath = "dep1"
+
+        [Ops.operation_id.Dep.From.GoFilePath]
+          Include = ["**/*"]
+
+        [Ops.operation_id.Dep.From.CopyOnlyFilePath]
+          Include = ["bin/*"]
+
+      [Ops.operation_id.Dep.To]
+        FilePath = "internal/dep1"

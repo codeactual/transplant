@@ -1,0 +1,3 @@
+#!/bin/bash
+
+echo "dep1/bin/tool"

@@ -1,0 +1,123 @@
+Template:
+  origin_module_filepath: '{{._config_dir}}'
+  copy_module_filepath: '{{._config_dir}}/../../../testdata/dynamic'
+  copy_module_importpath: 'copy.tld/user/proj'
+# All fixtures under this file's directory share this config file in order to avoid one-config per case.
+# It makes it easier to add new cases, refactor the config structure, etc.
+# It also exercises the assumption that each operation definition is independent.
+Ops:
+  copy_baseline:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/copy_baseline/origin'
+      LocalFilePath: 'local'
+      CopyOnlyFilePath:
+        Include:
+          - 'cpy_only/*.go'
+      RenameFilePath:
+        - Old: 'local/rename/old1.go'
+          New: 'rename/new1.go'
+        - Old: 'local/rename/old2.go'
+          New: 'rename/new2.go'
+      ReplaceString:
+        ImportPath:
+          Include:
+            - '**/*'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+          ReplaceString:
+            ImportPath:
+              Include:
+                - '**/*'
+        To:
+          FilePath: 'internal/dep1'
+  go_descendant:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/go_descendant/origin'
+      LocalFilePath: 'local'
+      GoDescendantFilePath:
+        Include:
+          - 'candidates/**/*.md'
+      ReplaceString:
+        ImportPath:
+          Include:
+            - '**/*'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+  auto_detect:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/auto_detect/origin'
+      LocalFilePath: 'local'
+      GoFilePath:
+        Include:
+          - 'local1'
+          - 'local2'
+          # Added in the standalone module
+          - 'new_ignore'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+  rename_file_at_filepath_root:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/rename_file_at_filepath_root/origin'
+      LocalFilePath: 'local'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+  dep_paths_excluded:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/dep_paths_excluded/origin'
+      LocalFilePath: 'local'
+      CopyOnlyFilePath:
+        Include:
+          - 'copy_only/*.go'
+          - '**/testdata/fixture'
+          - '**/testdata/fixture/**/*'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+          CopyOnlyFilePath:
+            Include:
+              - '**/testdata/fixture'
+              - '**/testdata/fixture/**/*'
+        To:
+          FilePath: 'internal/dep1'
+  renamed_files_retained:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/renamed_files_retained/origin'
+      LocalFilePath: 'local'
+      CopyOnlyFilePath:
+        Include:
+          - 'old*'
+      RenameFilePath:
+        - Old: 'local/old_retained'
+          New: 'new_retained'
+        - Old: 'local/old_removed'
+          New: 'new_removed'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'
+  copy_overwrite_minimal:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/copy_overwrite_minimal/origin'
+      LocalFilePath: 'local'
+      GoFilePath:
+        Include:
+          - 'auto_detect'
+          - 'go_descendant'
+      CopyOnlyFilePath:
+        Include:
+          - 'copy_only/*.go'
+      GoDescendantFilePath:
+        Include:
+          - 'go_descendant/*/*.md'
+    To:
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      ModuleFilePath: '{{.copy_module_filepath}}'

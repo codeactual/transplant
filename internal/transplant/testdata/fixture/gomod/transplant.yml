@@ -1,0 +1,38 @@
+Template:
+  origin_module_filepath: '{{._config_dir}}'
+  copy_module_filepath: '{{._config_dir}}/../../../testdata/dynamic'
+  copy_module_importpath: 'copy.tld/user/proj'
+# All fixtures under this file's directory share this config file in order to avoid one-config per case.
+# It makes it easier to add new cases, refactor the config structure, etc.
+# It also exercises the assumption that each operation definition is independent.
+Ops:
+  egress_sync_baseline:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/egress_sync_baseline/origin'
+      LocalFilePath: 'local'
+      Tests: true
+    To:
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      LocalFilePath: 'local'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+          Tests: true
+        To:
+          FilePath: 'internal'
+  egress_vendor:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/egress_vendor/origin'
+      LocalFilePath: 'local'
+      Tests: true
+    To:
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      ModuleImportPath: '{{.copy_module_importpath}}'
+      LocalFilePath: 'local'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+          Tests: true
+        To:
+          FilePath: 'internal'

@@ -1,0 +1,4 @@
+package ignore
+
+func IgnoreFunc() {
+}

@@ -1,0 +1,29 @@
+dist: bionic
+
+language: go
+
+go:
+  - 1.x
+  - 1.12.x
+  - 1.13.x
+
+notifications:
+  email: false
+
+script:
+  # For 1.12 build
+  - export GO111MODULE=on
+  # Assert compilation
+  - make build
+  # Assert test suite
+  - make test
+  # Assert "go get" accessible
+  - mkdir $HOME/go_get_test
+  - cd $HOME/go_get_test
+  - go mod init go_get_test
+  - 'go get -v github.com/codeactual/transplant/cmd/transplant@${TRAVIS_COMMIT}'
+  - transplant --help
+  # Attempt to invalidate Github's cached badge images
+  - curl --silent --output hub-purge.sh https://raw.githubusercontent.com/codeactual/hub-purge/master/hub-purge.sh
+  - chmod +x ./hub-purge.sh
+  - ./hub-purge.sh codeactual/transplant

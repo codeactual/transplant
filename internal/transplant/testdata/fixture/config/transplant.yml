@@ -1,0 +1,53 @@
+Template:
+  origin_module_filepath: '{{._config_dir}}'
+  copy_module_filepath: '{{._config_dir}}/../../../testdata/dynamic'
+  copy_module_importpath: 'copy.tld/user/proj'
+  env_origin_module_filepath: '$origin_module_filepath'
+  env_copy_module_filepath: '$copy_module_filepath'
+  env_copy_module_importpath: '$copy_module_importpath'
+# All fixtures under this file's directory share this config file in order to avoid one-config per case.
+# It makes it easier to add new cases, refactor the config structure, etc.
+# It also exercises the assumption that each operation definition is independent.
+Ops:
+  expand_env:
+    From:
+      ModuleFilePath: '{{.env_origin_module_filepath}}/expand_env/origin'
+      LocalFilePath: '${inline_edit}_local'
+      RenameFilePath:
+        - Old: '${inline_edit}_old'
+          New: '${inline_edit}_new'
+    To:
+      ModuleFilePath: '{{.env_copy_module_filepath}}'
+      LocalFilePath: '${inline_edit}_copy'
+      ModuleImportPath: '{{.env_copy_module_importpath}}'
+    Dep:
+      - From:
+          FilePath: '${inline_edit}_dep1'
+          CopyOnlyFilePath:
+            Include:
+              - '${inline_edit}_copy_only'
+        To:
+          FilePath: 'internal/${inline_edit}_dep1'
+  ingress_finalizer:
+    From:
+      ModuleFilePath: '{{.origin_module_filepath}}/ingress_finalizer/origin'
+      LocalFilePath: 'local'
+      CopyOnlyFilePath:
+        Include:
+          - 'bin/*'
+      RenameFilePath:
+        - Old: 'old1'
+          New: 'new1'
+        - Old: 'old2'
+          New: 'new2'
+    To:
+      ModuleFilePath: '{{.copy_module_filepath}}'
+      ModuleImportPath: 'copy.tld/user/proj'
+    Dep:
+      - From:
+          FilePath: 'dep1'
+          CopyOnlyFilePath:
+            Include:
+              - 'bin/*'
+        To:
+          FilePath: 'internal/dep1'
