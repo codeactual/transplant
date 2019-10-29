@@ -1,4 +1,4 @@
-.PHONY: build install test toc
+.PHONY: build install test test-dep toc
 
 pkg-path-base = github.com/codeactual/transplant
 
@@ -36,6 +36,9 @@ test:
 	@head -n -1 ./testdata/cover/cover.tmp | sed 's/:[0-9]\+://g' | sort > ./testdata/cover/index.txt
 	@tail -n 1 ./testdata/cover/cover.tmp | sed 's/^[^0-9]\+//' >> ./testdata/cover/index.txt
 	@rm -f ./testdata/cover/cover.out ./testdata/cover/cover.tmp
+
+test-dep:
+	@go get -v github.com/codeactual/testecho/cmd/testecho
 
 toc:
 	@find doc/ -name "*.md" -not -name README.md -exec doctoc --notitle {} \

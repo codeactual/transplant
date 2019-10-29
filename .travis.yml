@@ -16,7 +16,7 @@ script:
   # Assert compilation
   - make build
   # Assert test suite
-  - make test
+  - make test-dep test
   # Assert "go get" accessible
   - mkdir $HOME/go_get_test
   - cd $HOME/go_get_test
