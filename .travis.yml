@@ -16,6 +16,9 @@ script:
   # Assert compilation
   - make build
   # Assert test suite
+  # - Align the file-permission fixtures with the expectations. In this build environment
+  #   the files have 0775.
+  - find ./internal/transplant/testdata/fixture/egress/copy_file_perm -name tool -exec chmod 0755 {} \;
   - make test-dep test
   # Assert "go get" accessible
   - mkdir $HOME/go_get_test
