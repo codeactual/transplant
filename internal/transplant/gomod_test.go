@@ -9,6 +9,7 @@ package transplant_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -16,6 +17,7 @@ import (
 
 	cage_os "github.com/codeactual/transplant/internal/cage/os"
 	cage_file "github.com/codeactual/transplant/internal/cage/os/file"
+	cage_runtime "github.com/codeactual/transplant/internal/cage/runtime"
 	testkit_require "github.com/codeactual/transplant/internal/cage/testkit/testify/require"
 )
 
@@ -52,8 +54,16 @@ func (s *GomodSuite) TestEgressSyncBaseline() {
 		}()
 	}
 
-	s.DirsMatchExceptGomod(fixture.GoldenPath, fixture.Plan.StagePath)
-	s.DirsMatchExceptGomod(fixture.GoldenPath, fixture.OutputPath)
+	// go mod tidy produces a one-line difference in 1.12 from what's produced in 1.11/1.13.
+	semver, err := cage_runtime.VersionSemver()
+	require.NoError(t, err)
+	goldenPath := fixture.GoldenPath
+	if strings.HasPrefix(semver, "1.12") {
+		goldenPath += "_go112"
+	}
+
+	s.DirsMatchExceptGomod(goldenPath, fixture.Plan.StagePath)
+	s.DirsMatchExceptGomod(goldenPath, fixture.OutputPath)
 }
 
 // TestEgressVendor asserts that if GOFLAGS contains "-mod=vendor" and <ModuleFilePath>/{go.sum,vendor/modules.txt}
@@ -83,6 +93,14 @@ func (s *GomodSuite) TestEgressVendor() {
 		}()
 	}
 
+	// go mod tidy produces a one-line difference in 1.12 from what's produced in 1.11/1.13.
+	semver, err := cage_runtime.VersionSemver()
+	require.NoError(t, err)
+	goldenPath := fixture.GoldenPath
+	if strings.HasPrefix(semver, "1.12") {
+		goldenPath += "_go112"
+	}
+
 	// assert stage content
 
 	testkit_require.FileStringContains(
@@ -104,23 +122,23 @@ func (s *GomodSuite) TestEgressVendor() {
 
 	testkit_require.FilesMatch(
 		t,
-		filepath.Join(fixture.GoldenPath, "go.mod"),
+		filepath.Join(goldenPath, "go.mod"),
 		filepath.Join(fixture.Plan.StagePath, "go.mod"),
 		s.GomodVersionReplacer(FixtureGomodVersion),
 	)
 	testkit_require.FilesMatch(
 		t,
-		filepath.Join(fixture.GoldenPath, "go.sum"),
+		filepath.Join(goldenPath, "go.sum"),
 		filepath.Join(fixture.Plan.StagePath, "go.sum"),
 	)
 	testkit_require.DirsMatch(
 		t,
-		filepath.Join(fixture.GoldenPath, "local"),
+		filepath.Join(goldenPath, "local"),
 		filepath.Join(fixture.Plan.StagePath, "local"),
 	)
 	testkit_require.DirsMatch(
 		t,
-		filepath.Join(fixture.GoldenPath, "internal"),
+		filepath.Join(goldenPath, "internal"),
 		filepath.Join(fixture.Plan.StagePath, "internal"),
 	)
 
@@ -145,23 +163,23 @@ func (s *GomodSuite) TestEgressVendor() {
 
 	testkit_require.DirsMatch(
 		t,
-		filepath.Join(fixture.GoldenPath, "local"),
+		filepath.Join(goldenPath, "local"),
 		filepath.Join(fixture.OutputPath, "local"),
 	)
 	testkit_require.DirsMatch(
 		t,
-		filepath.Join(fixture.GoldenPath, "internal"),
+		filepath.Join(goldenPath, "internal"),
 		filepath.Join(fixture.OutputPath, "internal"),
 	)
 	testkit_require.FilesMatch(
 		t,
-		filepath.Join(fixture.GoldenPath, "go.mod"),
+		filepath.Join(goldenPath, "go.mod"),
 		filepath.Join(fixture.OutputPath, "go.mod"),
 		s.GomodVersionReplacer(FixtureGomodVersion),
 	)
 	testkit_require.FilesMatch(
 		t,
-		filepath.Join(fixture.GoldenPath, "go.sum"),
+		filepath.Join(goldenPath, "go.sum"),
 		filepath.Join(fixture.OutputPath, "go.sum"),
 	)
 }
