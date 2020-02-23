@@ -26,7 +26,6 @@ func (recv ExportedStruct0) Method0(p0 DefinedInt) (r0 AliasedInt) {
 }
 
 type ExportedStruct1 struct {
-	Next *ExportedStruct1
 }
 
 // nonExportedDefinedInt/anotherNonExportedDefinedInt assert that type chains

@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/require"
@@ -27,11 +28,34 @@ type IdentExpect struct {
 	Info *cage_pkgs.IdentInfo
 }
 
+func NewIdentExpect(i *cage_pkgs.IdentInfo) *IdentExpect {
+	return &IdentExpect{Name: i.Name, Info: i}
+}
+
+func (e *IdentExpect) Copy() *IdentExpect {
+	c := IdentExpect{Name: e.Name}
+	info := *e.Info
+	c.Info = &info
+	return &c
+}
+
 func (e *IdentExpect) AddType(expects ...*IdentExpect) *IdentExpect {
 	for _, expect := range expects {
 		e.Info.Types = append(e.Info.Types, expect.Info)
 	}
 	return e
+}
+
+func CycleOf(e *IdentExpect) *IdentExpect {
+	info := *e.Info
+	info.IsTypeDecl = false
+	info.IsCycle = true
+	info.Types = nil
+
+	return &IdentExpect{
+		Name: e.Name,
+		Info: &info,
+	}
 }
 
 // requireSimilarPosition is only a minimal check on the position because of two assumptions:
@@ -70,20 +94,23 @@ func (s *ApiInspectorSuite) requireSimilarIdentInfo(assertId, filename string, e
 	// that NewIdentInfo will return nil for the input node.)
 	require.Exactly(t, expect.Name, actualInfo.Name, assertId)
 
-	require.Exactly(t, expect.Info.IsTypeDecl, actualInfo.IsTypeDecl, assertId)
+	require.Exactly(
+		t, expect.Info.IsTypeDecl, actualInfo.IsTypeDecl,
+		fmt.Sprintf("%s: expected IdentInfo.IsTypeDecl to be %t", assertId, expect.Info.IsTypeDecl),
+	)
 	require.Exactly(t, expect.Info.PkgName, actualInfo.PkgName, assertId)
 	require.Exactly(t, expect.Info.PkgPath, actualInfo.PkgPath, assertId)
 
 	// Assert the IdentInfo of the node's type and underlying types (if any).
 
-	indent := "  -> "
+	indent := " -> "
 	expectTypesString := expect.Info.TypesString(indent)
 	if expectTypesString == "" {
-		expectTypesString = "<none>"
+		expectTypesString = "<none>\n"
 	}
 	actualTypesString := actualInfo.TypesString(indent)
 	if actualTypesString == "" {
-		actualTypesString = "<none>"
+		actualTypesString = "<none>\n"
 	}
 
 	baseTypeAssertId := fmt.Sprintf(
@@ -92,6 +119,9 @@ func (s *ApiInspectorSuite) requireSimilarIdentInfo(assertId, filename string, e
 		assertId, expectTypesString, actualTypesString,
 	)
 
+	expectTypeStack := cage_strings.NewStack()
+	actualTypeStack := cage_strings.NewStack()
+
 	var requireSameTypes func(e, a *cage_pkgs.IdentInfo, depth int)
 
 	requireSameTypes = func(e, a *cage_pkgs.IdentInfo, depth int) {
@@ -99,17 +129,50 @@ func (s *ApiInspectorSuite) requireSimilarIdentInfo(assertId, filename string, e
 		// failed expectation is located.
 		typeAssertId := fmt.Sprintf(
 			"\n\n****** queryAllPkgs DEPTH: %d ******\n\n%s\n\n"+
-				"DEPTH %d expect type: name [%s] pkg [%s] len(Type): %d\n"+
-				"DEPTH %d actual type: name [%s] pkg [%s] len(Type): %d\n",
+				"expect type stack (begins at depth 0):\n\t%s\n"+
+				"actual type stack (begins at depth 0):\n\t%s\n\n"+
+				"expect type: name [%s] pkg [%s] deps [%d] cycle [%t]\n"+
+				"actual type: name [%s] pkg [%s] deps [%d] cycle [%t]",
 			depth, baseTypeAssertId,
-			depth, e.Name, e.PkgPath, len(e.Types),
-			depth, a.Name, a.PkgPath, len(a.Types),
+			strings.Join(expectTypeStack.Items(), "\n\t"),
+			strings.Join(actualTypeStack.Items(), "\n\t"),
+			e.Name, e.PkgPath, len(e.Types), e.IsCycle,
+			a.Name, a.PkgPath, len(a.Types), a.IsCycle,
 		)
 
+		require.Exactly(t, a.IsCycle, a.IsCycle, typeAssertId)
+		if e.IsCycle {
+			require.False(t, e.IsTypeDecl, typeAssertId)
+			require.Empty(t, e.Types, typeAssertId)
+		}
+		if a.IsCycle {
+			require.False(t, a.IsTypeDecl, typeAssertId)
+			require.Empty(t, a.Types, typeAssertId)
+		}
+
+		// Skip inspection of Types slice because it's always expected to be empty
+		// and confirmed to be empty above.
+		if e.IsCycle {
+			return
+		}
+
 		if len(e.Types) == 0 {
+			if len(a.Types) != 0 {
+				for _, t := range a.Types {
+					fmt.Printf("actual type: %s (cycle: %t)\n", t.IdShort(), t.IsCycle)
+				}
+			}
 			require.Empty(t, a.Types, typeAssertId)
 			return
 		} else {
+			if len(e.Types) != len(a.Types) {
+				for _, t := range e.Types {
+					fmt.Printf("expect type: %s\n", t.IdShort())
+				}
+				for _, t := range a.Types {
+					fmt.Printf("actual type: %s\n", t.IdShort())
+				}
+			}
 			require.Exactly(t, len(e.Types), len(a.Types), typeAssertId)
 		}
 
@@ -123,16 +186,53 @@ func (s *ApiInspectorSuite) requireSimilarIdentInfo(assertId, filename string, e
 			require.Exactly(t, expectTypes[n].PkgName, actualTypes[n].PkgName, typeAssertId)
 			require.Exactly(t, expectTypes[n].PkgPath, actualTypes[n].PkgPath, typeAssertId)
 
-			// The type chain should only include IdentInfo values which describe type declarations
+			// Skip inspection of Types slice because it's always expected to be empty
+			// and confirmed to be empty below.
+			if expectTypes[n].IsCycle {
+				require.True(
+					t, actualTypes[n].IsCycle, typeAssertId,
+					fmt.Sprintf(
+						"%s\n\nactual IdentInfo.Types[%d] (%s) is not a cycle start",
+						typeAssertId, n, actualTypes[n].IdShort(),
+					),
+				)
+
+				require.Empty(t, expectTypes[n].Types, typeAssertId)
+				require.Empty(t, actualTypes[n].Types, typeAssertId)
+				continue
+			}
+
+			// The type chain should only include IdentInfo values which describe type declarations,
 			// not uses.
-			require.True(t, expectTypes[n].IsTypeDecl, typeAssertId)
-			require.True(t, actualTypes[n].IsTypeDecl, typeAssertId)
+			require.True(
+				t, expectTypes[n].IsTypeDecl,
+				fmt.Sprintf(
+					"%s\n\nexpect IdentInfo.Types[%d] (%s) is not a type declaration",
+					typeAssertId, n, expectTypes[n].IdShort(),
+				),
+			)
+			require.True(
+				t, actualTypes[n].IsTypeDecl,
+				fmt.Sprintf(
+					"%s\n\nactual IdentInfo.Types[%d] (%s) is not a type declaration",
+					typeAssertId, n, actualTypes[n].IdShort(),
+				),
+			)
 
 			s.requireSimilarPosition(typeAssertId, expectTypes[n].Position.Filename, token.Position{}, actualTypes[n].Position)
 
+			expectTypeStack.Push(expectTypes[n].PkgPath + "." + expectTypes[n].Name)
+			actualTypeStack.Push(actualTypes[n].PkgPath + "." + actualTypes[n].Name)
+
 			requireSameTypes(expectTypes[n], actualTypes[n], depth+1)
+
+			expectTypeStack.Pop()
+			actualTypeStack.Pop()
 		}
 	}
+
+	expectTypeStack.Push(expect.Info.PkgPath + "." + expect.Info.Name)
+	actualTypeStack.Push(actualInfo.PkgPath + "." + actualInfo.Name)
 
 	requireSameTypes(expect.Info, actualInfo, 0)
 }
@@ -214,6 +314,7 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 	localFilename := filepath.Join(baseDir, "local", "local.go")
 	dotImpFilename := filepath.Join(baseDir, "importer", "dot", "dot.go")
 	namedImpFilename := filepath.Join(baseDir, "importer", "named", "named.go")
+	cycleFilename := filepath.Join(baseDir, "cycle", "cycle.go")
 
 	// Inspect the fixture packages.
 
@@ -224,12 +325,13 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 			filepath.Dir(localFilename),
 			filepath.Dir(dotImpFilename),
 			filepath.Dir(namedImpFilename),
+			filepath.Dir(cycleFilename),
 		}...,
 	)
 
 	// Provide common helpers.
 
-	newNonTypeDecl := func(identName, pkgName, pkgPath string, pos token.Position) *IdentExpect {
+	newTypeRef := func(identName, pkgName, pkgPath string, pos token.Position) *IdentExpect {
 		return &IdentExpect{
 			Name: identName,
 			Info: &cage_pkgs.IdentInfo{
@@ -241,7 +343,7 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 		}
 	}
 	newTypeDecl := func(identName, pkgName, pkgPath string, pos token.Position) *IdentExpect {
-		e := newNonTypeDecl(identName, pkgName, pkgPath, pos)
+		e := newTypeRef(identName, pkgName, pkgPath, pos)
 		e.Info.IsTypeDecl = true
 		return e
 	}
@@ -251,8 +353,8 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 	localPkgPath := "fixture.tld/ident_info/local"
 	localPkgName := path.Base(localPkgPath)
 	localPos := token.Position{Filename: localFilename}
-	newLocalNonTypeDecl := func(identName string) *IdentExpect {
-		return newNonTypeDecl(identName, localPkgName, localPkgPath, localPos)
+	newLocalTypeRef := func(identName string) *IdentExpect {
+		return newTypeRef(identName, localPkgName, localPkgPath, localPos)
 	}
 	newLocalTypeDecl := func(identName string) *IdentExpect {
 		return newTypeDecl(identName, localPkgName, localPkgPath, localPos)
@@ -294,122 +396,120 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 		nonExportedStruct1,
 
 		exportedStruct0,
-		newLocalNonTypeDecl("nonExportedStruct0").AddType(nonExportedStruct0),
+		newLocalTypeRef("nonExportedStruct0").AddType(nonExportedStruct0),
 		{Name: "Field0"},
-		newLocalNonTypeDecl("nonExportedStruct1").AddType(nonExportedStruct1),
+		newLocalTypeRef("nonExportedStruct1").AddType(nonExportedStruct1),
 		{Name: "Field1"},
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
-		newLocalNonTypeDecl("DefinedFunc").AddType(definedFunc),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("DefinedFunc").AddType(definedFunc),
 		{Name: "Field2"},
 		{Name: "Shadowed0"},
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "Shadowed1"},
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "Shadowed0"},
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
 
 		{Name: "recv"},
-		newLocalNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newLocalTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Method0"},
 		{Name: "p0"},
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "r0"},
-		newLocalNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newLocalTypeRef("AliasedInt").AddType(aliasedInt),
 
 		exportedStruct1,
-		{Name: "Next"},
-		newLocalNonTypeDecl("ExportedStruct1").AddType(exportedStruct1),
 
 		newLocalTypeDecl("nonExportedDefinedInt"),
 		{Name: "int"},
 		newLocalTypeDecl("anotherNonExportedDefinedInt").AddType(nonExportedDefinedInt),
-		newLocalNonTypeDecl("nonExportedDefinedInt").AddType(nonExportedDefinedInt),
+		newLocalTypeRef("nonExportedDefinedInt").AddType(nonExportedDefinedInt),
 
 		newLocalTypeDecl("DefinedInt").AddType(anotherNonExportedDefinedInt),
-		newLocalNonTypeDecl("anotherNonExportedDefinedInt").AddType(anotherNonExportedDefinedInt),
+		newLocalTypeRef("anotherNonExportedDefinedInt").AddType(anotherNonExportedDefinedInt),
 
-		newLocalNonTypeDecl("DefinedIntIota0").AddType(definedInt),
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("DefinedIntIota0").AddType(definedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "iota"},
-		newLocalNonTypeDecl("DefinedIntIota1").AddType(definedInt),
+		newLocalTypeRef("DefinedIntIota1").AddType(definedInt),
 
 		newLocalTypeDecl("nonExportedAliasedInt"),
 		{Name: "int"},
 		newLocalTypeDecl("anotherNonExportedAliasedInt").AddType(nonExportedAliasedInt),
-		newLocalNonTypeDecl("nonExportedAliasedInt").AddType(nonExportedAliasedInt),
+		newLocalTypeRef("nonExportedAliasedInt").AddType(nonExportedAliasedInt),
 
 		newLocalTypeDecl("AliasedInt").AddType(anotherNonExportedAliasedInt),
-		newLocalNonTypeDecl("anotherNonExportedAliasedInt").AddType(anotherNonExportedAliasedInt),
+		newLocalTypeRef("anotherNonExportedAliasedInt").AddType(anotherNonExportedAliasedInt),
 
 		newLocalTypeDecl("definedFunc").AddType(definedInt, aliasedInt),
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
-		newLocalNonTypeDecl("AliasedInt").AddType(aliasedInt),
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
-		newLocalNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("AliasedInt").AddType(aliasedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("AliasedInt").AddType(aliasedInt),
 		newLocalTypeDecl("DefinedFunc").AddType(nonExportedDefinedFunc),
-		newLocalNonTypeDecl("definedFunc").AddType(nonExportedDefinedFunc),
+		newLocalTypeRef("definedFunc").AddType(nonExportedDefinedFunc),
 
 		newLocalTypeDecl("aliasedFunc").AddType(definedInt, aliasedInt),
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
-		newLocalNonTypeDecl("AliasedInt").AddType(aliasedInt),
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
-		newLocalNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("AliasedInt").AddType(aliasedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("AliasedInt").AddType(aliasedInt),
 		newLocalTypeDecl("AliasedFunc").AddType(nonExportedAliasedFunc),
-		newLocalNonTypeDecl("aliasedFunc").AddType(nonExportedAliasedFunc),
+		newLocalTypeRef("aliasedFunc").AddType(nonExportedAliasedFunc),
 
 		newLocalTypeDecl("LocalInterface0").AddType(definedInt),
 		{Name: "Method0"},
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
 
 		newLocalTypeDecl("LocalInterface0Impl0"),
 		{Name: "recv"},
-		newLocalNonTypeDecl("LocalInterface0Impl0").AddType(newLocalTypeDecl("LocalInterface0Impl0")),
+		newLocalTypeRef("LocalInterface0Impl0").AddType(newLocalTypeDecl("LocalInterface0Impl0")),
 		{Name: "Method0"},
 		{Name: "p0"},
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
 
-		newLocalNonTypeDecl("IntLiteral100"),
+		newLocalTypeRef("IntLiteral100"),
 
-		newLocalNonTypeDecl("LocalFunc0").AddType(definedInt, aliasedInt, definedFunc, aliasedFunc),
+		newLocalTypeRef("LocalFunc0").AddType(definedInt, aliasedInt, definedFunc, aliasedFunc),
 		{Name: "p0"},
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "p1"},
-		newLocalNonTypeDecl("AliasedInt").AddType(aliasedInt),
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
-		newLocalNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newLocalTypeRef("AliasedInt").AddType(aliasedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("AliasedInt").AddType(aliasedInt),
 		{Name: "r0"},
-		newLocalNonTypeDecl("DefinedFunc").AddType(definedFunc),
+		newLocalTypeRef("DefinedFunc").AddType(definedFunc),
 		{Name: "r1"},
-		newLocalNonTypeDecl("AliasedFunc").AddType(aliasedFunc),
+		newLocalTypeRef("AliasedFunc").AddType(aliasedFunc),
 		{Name: "nil"},
 
-		newLocalNonTypeDecl("LocalFunc1").AddType(definedInt, aliasedInt),
+		newLocalTypeRef("LocalFunc1").AddType(definedInt, aliasedInt),
 		{Name: "p0"},
 		{Name: "p1"},
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "p2"},
-		newLocalNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newLocalTypeRef("AliasedInt").AddType(aliasedInt),
 		{Name: "r0"},
 		{Name: "r1"},
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "r2"},
 		{Name: "r3"},
-		newLocalNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newLocalTypeRef("AliasedInt").AddType(aliasedInt),
 
-		newLocalNonTypeDecl("LocalFunc2").AddType(
+		newLocalTypeRef("LocalFunc2").AddType(
 			definedInt, aliasedInt, definedFunc, aliasedFunc, nonExportedStruct0, nonExportedStruct1,
 		),
 		{Name: "p0"},
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
-		newLocalNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("AliasedInt").AddType(aliasedInt),
 		{Name: "p1"},
-		newLocalNonTypeDecl("DefinedFunc").AddType(definedFunc),
-		newLocalNonTypeDecl("AliasedFunc").AddType(aliasedFunc),
-		newLocalNonTypeDecl("nonExportedStruct0").AddType(nonExportedStruct0),
-		newLocalNonTypeDecl("nonExportedStruct1").AddType(nonExportedStruct1),
+		newLocalTypeRef("DefinedFunc").AddType(definedFunc),
+		newLocalTypeRef("AliasedFunc").AddType(aliasedFunc),
+		newLocalTypeRef("nonExportedStruct0").AddType(nonExportedStruct0),
+		newLocalTypeRef("nonExportedStruct1").AddType(nonExportedStruct1),
 		{Name: "nil"},
 
-		newLocalNonTypeDecl("LocalNonGlobalUse"),
+		newLocalTypeRef("LocalNonGlobalUse"),
 
 		{Name: "_"},
 		{Name: "_"},
@@ -424,35 +524,35 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 		{Name: "_"},
 		{Name: "_"},
 		{Name: "_"},
-		newLocalNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newLocalTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "nonExportedStruct0"},
-		newLocalNonTypeDecl("nonExportedStruct0").AddType(nonExportedStruct0),
+		newLocalTypeRef("nonExportedStruct0").AddType(nonExportedStruct0),
 		{Name: "Field0"},
-		newLocalNonTypeDecl("nonExportedStruct1").AddType(nonExportedStruct1),
+		newLocalTypeRef("nonExportedStruct1").AddType(nonExportedStruct1),
 		{Name: "Shadowed0"},
 
-		newLocalNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newLocalTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "IntField"},
-		newLocalNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newLocalTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Field0"},
-		newLocalNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newLocalTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Field1"},
-		newLocalNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newLocalTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Method0"},
-		newLocalNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newLocalTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Method0"},
-		newLocalNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newLocalTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Shadowed0"},
 
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
-		newLocalNonTypeDecl("AliasedInt").AddType(aliasedInt),
-		newLocalNonTypeDecl("DefinedIntIota0").AddType(definedInt),
-		newLocalNonTypeDecl("IntLiteral100"),
-		newLocalNonTypeDecl("LocalFunc0").AddType(definedInt, aliasedInt, definedFunc, aliasedFunc),
-		newLocalNonTypeDecl("LocalFunc0").AddType(definedInt, aliasedInt, definedFunc, aliasedFunc),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("AliasedInt").AddType(aliasedInt),
+		newLocalTypeRef("DefinedIntIota0").AddType(definedInt),
+		newLocalTypeRef("IntLiteral100"),
+		newLocalTypeRef("LocalFunc0").AddType(definedInt, aliasedInt, definedFunc, aliasedFunc),
+		newLocalTypeRef("LocalFunc0").AddType(definedInt, aliasedInt, definedFunc, aliasedFunc),
 
 		{Name: "es0"},
-		newLocalNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newLocalTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "_"},
 		{Name: "_"},
 		{Name: "_"},
@@ -465,11 +565,11 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 		{Name: "es0"},
 		{Name: "Method0"},
 		{Name: "Shadowed0"},
-		newLocalNonTypeDecl("DefinedInt").AddType(definedInt),
+		newLocalTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "_"},
 		{Name: "Shadowed0"},
 
-		newLocalNonTypeDecl("LocalScopeTest"),
+		newLocalTypeRef("LocalScopeTest"),
 
 		{Name: "DefinedInt"},
 		{Name: "int"},
@@ -492,8 +592,8 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 	dotImpPkgPath := "fixture.tld/ident_info/importer/dot"
 	dotImpPkgName := path.Base(dotImpPkgPath)
 	dotImpPos := token.Position{Filename: dotImpFilename}
-	newDotImpNonTypeDecl := func(identName string) *IdentExpect {
-		return newNonTypeDecl(identName, dotImpPkgName, dotImpPkgPath, dotImpPos)
+	newDotImpTypeRef := func(identName string) *IdentExpect {
+		return newTypeRef(identName, dotImpPkgName, dotImpPkgPath, dotImpPos)
 	}
 	newDotImpTypeDecl := func(identName string) *IdentExpect {
 		return newTypeDecl(identName, dotImpPkgName, dotImpPkgPath, dotImpPos)
@@ -515,73 +615,71 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 		{Name: "."},
 		{Name: "."},
 
-		newDotImpNonTypeDecl("ConstFromNonInspectedPkg"),
+		newDotImpTypeRef("ConstFromNonInspectedPkg"),
 		{Name: "NonInspectedConst"},
 
-		newDotImpNonTypeDecl("CustomDefinedIntIota0").AddType(definedInt),
-		newDotImpNonTypeDecl("DefinedInt").AddType(definedInt),
+		newDotImpTypeRef("CustomDefinedIntIota0").AddType(definedInt),
+		newDotImpTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "iota"},
-		newDotImpNonTypeDecl("CustomDefinedIntIota1").AddType(definedInt),
+		newDotImpTypeRef("CustomDefinedIntIota1").AddType(definedInt),
 
-		newDotImpNonTypeDecl("DefinedIntIota0Copy").AddType(definedInt),
-		newDotImpNonTypeDecl("DefinedIntIota0").AddType(definedInt),
+		newDotImpTypeRef("DefinedIntIota0Copy").AddType(definedInt),
+		newDotImpTypeRef("DefinedIntIota0").AddType(definedInt),
 
 		dotImpCustomExportedStruct0,
-		newDotImpNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newDotImpTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Field0"},
-		newDotImpNonTypeDecl("ExportedStruct1").AddType(exportedStruct1),
-		{Name: "Next"},
-		newDotImpNonTypeDecl("CustomExportedStruct0").AddType(dotImpCustomExportedStruct0),
+		newDotImpTypeRef("ExportedStruct1").AddType(exportedStruct1),
 
 		{Name: "recv"},
-		newDotImpNonTypeDecl("CustomExportedStruct0").AddType(dotImpCustomExportedStruct0),
+		newDotImpTypeRef("CustomExportedStruct0").AddType(dotImpCustomExportedStruct0),
 		{Name: "Method0"},
 		{Name: "p0"},
-		newDotImpNonTypeDecl("DefinedInt").AddType(definedInt),
+		newDotImpTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "r0"},
-		newDotImpNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newDotImpTypeRef("AliasedInt").AddType(aliasedInt),
 
 		newDotImpTypeDecl("ReDefinedInt").AddType(definedInt),
-		newDotImpNonTypeDecl("DefinedInt").AddType(definedInt),
+		newDotImpTypeRef("DefinedInt").AddType(definedInt),
 
 		newDotImpTypeDecl("ReDefinedIntTwice").AddType(dotImpReDefinedInt),
-		newDotImpNonTypeDecl("ReDefinedInt").AddType(dotImpReDefinedInt),
+		newDotImpTypeRef("ReDefinedInt").AddType(dotImpReDefinedInt),
 
 		newDotImpTypeDecl("ReDefinedIntThrice").AddType(dotImpReDefinedIntTwice),
-		newDotImpNonTypeDecl("ReDefinedIntTwice").AddType(dotImpReDefinedIntTwice),
+		newDotImpTypeRef("ReDefinedIntTwice").AddType(dotImpReDefinedIntTwice),
 
 		newDotImpTypeDecl("ReAliasedInt").AddType(aliasedInt),
-		newDotImpNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newDotImpTypeRef("AliasedInt").AddType(aliasedInt),
 
 		newDotImpTypeDecl("ReAliasedIntTwice").AddType(dotImpReAliasedInt),
-		newDotImpNonTypeDecl("ReAliasedInt").AddType(dotImpReAliasedInt),
+		newDotImpTypeRef("ReAliasedInt").AddType(dotImpReAliasedInt),
 
 		newDotImpTypeDecl("ReAliasedIntThrice").AddType(dotImpReAliasedIntTwice),
-		newDotImpNonTypeDecl("ReAliasedIntTwice").AddType(dotImpReAliasedIntTwice),
+		newDotImpTypeRef("ReAliasedIntTwice").AddType(dotImpReAliasedIntTwice),
 
 		newDotImpTypeDecl("ReDefinedFunc").AddType(definedFunc),
-		newDotImpNonTypeDecl("DefinedFunc").AddType(definedFunc),
+		newDotImpTypeRef("DefinedFunc").AddType(definedFunc),
 		newDotImpTypeDecl("ReAliasedFunc").AddType(aliasedFunc),
-		newDotImpNonTypeDecl("AliasedFunc").AddType(aliasedFunc),
+		newDotImpTypeRef("AliasedFunc").AddType(aliasedFunc),
 
 		newDotImpTypeDecl("Interface0").AddType(definedInt),
 		{Name: "Method0"},
-		newDotImpNonTypeDecl("DefinedInt").AddType(definedInt),
+		newDotImpTypeRef("DefinedInt").AddType(definedInt),
 
-		newDotImpNonTypeDecl("Func0").AddType(definedInt, aliasedInt, definedFunc, aliasedFunc),
+		newDotImpTypeRef("Func0").AddType(definedInt, aliasedInt, definedFunc, aliasedFunc),
 		{Name: "p0"},
-		newDotImpNonTypeDecl("DefinedInt").AddType(definedInt),
+		newDotImpTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "p1"},
-		newDotImpNonTypeDecl("AliasedInt").AddType(aliasedInt),
-		newDotImpNonTypeDecl("DefinedInt").AddType(definedInt),
-		newDotImpNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newDotImpTypeRef("AliasedInt").AddType(aliasedInt),
+		newDotImpTypeRef("DefinedInt").AddType(definedInt),
+		newDotImpTypeRef("AliasedInt").AddType(aliasedInt),
 		{Name: "r0"},
-		newDotImpNonTypeDecl("DefinedFunc").AddType(definedFunc),
+		newDotImpTypeRef("DefinedFunc").AddType(definedFunc),
 		{Name: "r1"},
-		newDotImpNonTypeDecl("AliasedFunc").AddType(aliasedFunc),
+		newDotImpTypeRef("AliasedFunc").AddType(aliasedFunc),
 		{Name: "nil"},
 
-		newDotImpNonTypeDecl("NonGlobalUse"),
+		newDotImpTypeRef("NonGlobalUse"),
 
 		{Name: "_"},
 		{Name: "_"},
@@ -591,37 +689,37 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 		{Name: "_"},
 		{Name: "_"},
 		{Name: "_"},
-		newDotImpNonTypeDecl("CustomExportedStruct0").AddType(
+		newDotImpTypeRef("CustomExportedStruct0").AddType(
 			newDotImpTypeDecl("CustomExportedStruct0").AddType(exportedStruct0, exportedStruct1),
 		),
 		{Name: "ExportedStruct0"},
-		newDotImpNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newDotImpTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Field0"},
-		newDotImpNonTypeDecl("ExportedStruct1").AddType(exportedStruct1),
-		newDotImpNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newDotImpTypeRef("ExportedStruct1").AddType(exportedStruct1),
+		newDotImpTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Method0"},
-		newDotImpNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newDotImpTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Method0"},
 
-		newDotImpNonTypeDecl("CustomDefinedIntIota0").AddType(definedInt),
-		newDotImpNonTypeDecl("CustomDefinedIntIota1").AddType(definedInt),
-		newDotImpNonTypeDecl("ReDefinedIntThrice").AddType(dotImpReDefinedIntThrice),
-		newDotImpNonTypeDecl("ReAliasedIntThrice").AddType(dotImpReAliasedIntThrice),
-		newDotImpNonTypeDecl("DefinedIntIota0Copy").AddType(definedInt),
+		newDotImpTypeRef("CustomDefinedIntIota0").AddType(definedInt),
+		newDotImpTypeRef("CustomDefinedIntIota1").AddType(definedInt),
+		newDotImpTypeRef("ReDefinedIntThrice").AddType(dotImpReDefinedIntThrice),
+		newDotImpTypeRef("ReAliasedIntThrice").AddType(dotImpReAliasedIntThrice),
+		newDotImpTypeRef("DefinedIntIota0Copy").AddType(definedInt),
 
 		{Name: "es0"},
-		newDotImpNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newDotImpTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "es0"},
 		{Name: "Method0"},
 
 		{Name: "_"},
 		{Name: "_"},
 		{Name: "_"},
-		newDotImpNonTypeDecl("DefinedInt").AddType(definedInt),
-		newDotImpNonTypeDecl("AliasedInt").AddType(aliasedInt),
-		newDotImpNonTypeDecl("DefinedIntIota0").AddType(definedInt),
+		newDotImpTypeRef("DefinedInt").AddType(definedInt),
+		newDotImpTypeRef("AliasedInt").AddType(aliasedInt),
+		newDotImpTypeRef("DefinedIntIota0").AddType(definedInt),
 
-		newDotImpNonTypeDecl("ScopeTest"),
+		newDotImpTypeRef("ScopeTest"),
 
 		{Name: "DefinedInt"},
 		{Name: "int"},
@@ -644,8 +742,8 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 	namedImpPkgPath := "fixture.tld/ident_info/importer/named"
 	namedImpPkgName := path.Base(namedImpPkgPath)
 	namedImpPos := token.Position{Filename: namedImpFilename}
-	newNamedImpNonTypeDecl := func(identName string) *IdentExpect {
-		return newNonTypeDecl(identName, namedImpPkgName, namedImpPkgPath, namedImpPos)
+	newNamedImpTypeRef := func(identName string) *IdentExpect {
+		return newTypeRef(identName, namedImpPkgName, namedImpPkgPath, namedImpPos)
 	}
 	newNamedImpTypeDecl := func(identName string) *IdentExpect {
 		return newTypeDecl(identName, namedImpPkgName, namedImpPkgPath, namedImpPos)
@@ -671,103 +769,101 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 
 		newNamedImpTypeDecl("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newNamedImpTypeRef("ExportedStruct0").AddType(exportedStruct0),
 
-		newNamedImpNonTypeDecl("ConstFromNonInspectedPkg"),
+		newNamedImpTypeRef("ConstFromNonInspectedPkg"),
 		{Name: "other_pkg1"},
 		{Name: "NonInspectedConst"},
 
-		newNamedImpNonTypeDecl("CustomDefinedIntIota0").AddType(definedInt),
+		newNamedImpTypeRef("CustomDefinedIntIota0").AddType(definedInt),
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("DefinedInt").AddType(definedInt),
+		newNamedImpTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "iota"},
-		newNamedImpNonTypeDecl("CustomDefinedIntIota1").AddType(definedInt),
+		newNamedImpTypeRef("CustomDefinedIntIota1").AddType(definedInt),
 
-		newNamedImpNonTypeDecl("DefinedIntIota0"),
+		newNamedImpTypeRef("DefinedIntIota0"),
 
-		newNamedImpNonTypeDecl("DefinedIntIota0Copy").AddType(definedInt),
+		newNamedImpTypeRef("DefinedIntIota0Copy").AddType(definedInt),
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("DefinedIntIota0").AddType(definedInt),
+		newNamedImpTypeRef("DefinedIntIota0").AddType(definedInt),
 
 		namedImpCustomExportedStruct0,
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newNamedImpTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Field0"},
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("ExportedStruct1").AddType(exportedStruct1),
-		{Name: "Next"},
-		newNamedImpNonTypeDecl("CustomExportedStruct0").AddType(namedImpCustomExportedStruct0),
+		newNamedImpTypeRef("ExportedStruct1").AddType(exportedStruct1),
 
 		{Name: "recv"},
-		newNamedImpNonTypeDecl("CustomExportedStruct0").AddType(namedImpCustomExportedStruct0),
+		newNamedImpTypeRef("CustomExportedStruct0").AddType(namedImpCustomExportedStruct0),
 		{Name: "Method0"},
 		{Name: "p0"},
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("DefinedInt").AddType(definedInt),
+		newNamedImpTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "r0"},
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newNamedImpTypeRef("AliasedInt").AddType(aliasedInt),
 
 		namedImpDefinedInt,
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("DefinedInt").AddType(definedInt),
+		newNamedImpTypeRef("DefinedInt").AddType(definedInt),
 
 		newNamedImpTypeDecl("ReDefinedInt").AddType(definedInt),
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("DefinedInt").AddType(definedInt),
+		newNamedImpTypeRef("DefinedInt").AddType(definedInt),
 
 		newNamedImpTypeDecl("ReDefinedIntTwice").AddType(namedImpReDefinedInt),
-		newNamedImpNonTypeDecl("ReDefinedInt").AddType(namedImpReDefinedInt),
+		newNamedImpTypeRef("ReDefinedInt").AddType(namedImpReDefinedInt),
 
 		newNamedImpTypeDecl("ReDefinedIntThrice").AddType(namedImpReDefinedIntTwice),
-		newNamedImpNonTypeDecl("ReDefinedIntTwice").AddType(namedImpReDefinedIntTwice),
+		newNamedImpTypeRef("ReDefinedIntTwice").AddType(namedImpReDefinedIntTwice),
 
 		newNamedImpTypeDecl("ReAliasedInt").AddType(aliasedInt),
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newNamedImpTypeRef("AliasedInt").AddType(aliasedInt),
 
 		newNamedImpTypeDecl("ReAliasedIntTwice").AddType(namedImpReAliasedInt),
-		newNamedImpNonTypeDecl("ReAliasedInt").AddType(namedImpReAliasedInt),
+		newNamedImpTypeRef("ReAliasedInt").AddType(namedImpReAliasedInt),
 
 		newNamedImpTypeDecl("ReAliasedIntThrice").AddType(namedImpReAliasedIntTwice),
-		newNamedImpNonTypeDecl("ReAliasedIntTwice").AddType(namedImpReAliasedIntTwice),
+		newNamedImpTypeRef("ReAliasedIntTwice").AddType(namedImpReAliasedIntTwice),
 
 		newNamedImpTypeDecl("ReDefinedFunc").AddType(definedFunc),
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("DefinedFunc").AddType(definedFunc),
+		newNamedImpTypeRef("DefinedFunc").AddType(definedFunc),
 		newNamedImpTypeDecl("ReAliasedFunc").AddType(aliasedFunc),
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("AliasedFunc").AddType(aliasedFunc),
+		newNamedImpTypeRef("AliasedFunc").AddType(aliasedFunc),
 
 		newNamedImpTypeDecl("Interface0").AddType(definedInt),
 		{Name: "Method0"},
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("DefinedInt").AddType(definedInt),
+		newNamedImpTypeRef("DefinedInt").AddType(definedInt),
 
 		newNamedImpTypeDecl("Interface1").AddType(namedImpDefinedInt),
 		{Name: "Method0"},
-		newNamedImpNonTypeDecl("DefinedInt").AddType(namedImpDefinedInt),
+		newNamedImpTypeRef("DefinedInt").AddType(namedImpDefinedInt),
 
-		newNamedImpNonTypeDecl("NamedFunc0").AddType(definedInt, aliasedInt, definedFunc, aliasedFunc),
+		newNamedImpTypeRef("NamedFunc0").AddType(definedInt, aliasedInt, definedFunc, aliasedFunc),
 		{Name: "p0"},
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("DefinedInt").AddType(definedInt),
+		newNamedImpTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "p1"},
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newNamedImpTypeRef("AliasedInt").AddType(aliasedInt),
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("DefinedInt").AddType(definedInt),
+		newNamedImpTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newNamedImpTypeRef("AliasedInt").AddType(aliasedInt),
 		{Name: "r0"},
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("DefinedFunc").AddType(definedFunc),
+		newNamedImpTypeRef("DefinedFunc").AddType(definedFunc),
 		{Name: "r1"},
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("AliasedFunc").AddType(aliasedFunc),
+		newNamedImpTypeRef("AliasedFunc").AddType(aliasedFunc),
 		{Name: "nil"},
 
-		newNamedImpNonTypeDecl("NonGlobalUse"),
+		newNamedImpTypeRef("NonGlobalUse"),
 
 		{Name: "_"},
 		{Name: "_"},
@@ -775,29 +871,29 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 		{Name: "_"},
 		{Name: "_"},
 		{Name: "_"},
-		newNamedImpNonTypeDecl("CustomExportedStruct0").AddType(
+		newNamedImpTypeRef("CustomExportedStruct0").AddType(
 			newNamedImpTypeDecl("CustomExportedStruct0").AddType(exportedStruct0, exportedStruct1),
 		),
 		{Name: "ExportedStruct0"},
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newNamedImpTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Field0"},
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("ExportedStruct1").AddType(exportedStruct1),
+		newNamedImpTypeRef("ExportedStruct1").AddType(exportedStruct1),
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newNamedImpTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Method0"},
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newNamedImpTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "Method0"},
 
-		newNamedImpNonTypeDecl("CustomDefinedIntIota0").AddType(definedInt),
-		newNamedImpNonTypeDecl("ReDefinedIntThrice").AddType(namedImpReDefinedIntThrice),
-		newNamedImpNonTypeDecl("ReAliasedIntThrice").AddType(namedImpReAliasedIntThrice),
+		newNamedImpTypeRef("CustomDefinedIntIota0").AddType(definedInt),
+		newNamedImpTypeRef("ReDefinedIntThrice").AddType(namedImpReDefinedIntThrice),
+		newNamedImpTypeRef("ReAliasedIntThrice").AddType(namedImpReAliasedIntThrice),
 
 		{Name: "es0"},
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("ExportedStruct0").AddType(exportedStruct0),
+		newNamedImpTypeRef("ExportedStruct0").AddType(exportedStruct0),
 		{Name: "es0"},
 		{Name: "Method0"},
 
@@ -805,13 +901,13 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 		{Name: "_"},
 		{Name: "_"},
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("DefinedInt").AddType(definedInt),
+		newNamedImpTypeRef("DefinedInt").AddType(definedInt),
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("AliasedInt").AddType(aliasedInt),
+		newNamedImpTypeRef("AliasedInt").AddType(aliasedInt),
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("DefinedIntIota0").AddType(definedInt),
+		newNamedImpTypeRef("DefinedIntIota0").AddType(definedInt),
 
-		newNamedImpNonTypeDecl("ScopeTest"),
+		newNamedImpTypeRef("ScopeTest"),
 
 		{Name: "ReDefinedInt"},
 		{Name: "int"},
@@ -827,10 +923,367 @@ func (s *ApiInspectorSuite) TestNewIdentInfo() {
 		{Name: "_"},
 		{Name: "DefinedIntIota0Copy"},
 
-		newNamedImpNonTypeDecl("ImportedInterfaceImplUse"),
+		newNamedImpTypeRef("ImportedInterfaceImplUse"),
 		{Name: "other_pkg0"},
-		newNamedImpNonTypeDecl("LocalInterface0Impl0").AddType(newLocalTypeDecl("LocalInterface0Impl0")),
+		newNamedImpTypeRef("LocalInterface0Impl0").AddType(newLocalTypeDecl("LocalInterface0Impl0")),
 		{Name: "Method0"},
 	}
 	s.requireFileIdentInfo(i, namedImpFilename, expect)
+
+	// Assert results for all the identifiers from ident_info/cycle/cycle.go.
+
+	cyclePkgPath := "fixture.tld/ident_info/cycle"
+	cyclePkgName := path.Base(cyclePkgPath)
+	cyclePos := token.Position{Filename: cycleFilename}
+	newCycleTypeRef := func(identName string) *IdentExpect {
+		return newTypeRef(identName, cyclePkgName, cyclePkgPath, cyclePos)
+	}
+	newCycleTypeDecl := func(identName string) *IdentExpect {
+		return newTypeDecl(identName, cyclePkgName, cyclePkgPath, cyclePos)
+	}
+
+	aDeclTmpl := newCycleTypeDecl("A")
+	bDeclTmpl := newCycleTypeDecl("B")
+	cDeclTmpl := newCycleTypeDecl("C")
+
+	aRefTmpl := newCycleTypeRef("A")
+	bRefTmpl := newCycleTypeRef("B")
+	cRefTmpl := newCycleTypeRef("C")
+
+	copyTmpl := func(src *IdentExpect) func() *IdentExpect {
+		return func() *IdentExpect {
+			return src.Copy()
+		}
+	}
+
+	aDecl := copyTmpl(aDeclTmpl)
+	bDecl := copyTmpl(bDeclTmpl)
+	cDecl := copyTmpl(cDeclTmpl)
+
+	aRef := copyTmpl(aRefTmpl)
+	bRef := copyTmpl(bRefTmpl)
+	cRef := copyTmpl(cRefTmpl)
+
+	// Expect an IdentInfo.Types to include a type the start of a cycle if NewIdentInfo's
+	// recursive walk of type dependencies would revisit any type already encountered
+	// during the current "path" traversed starting at NewIdentInfo's input identifier,
+	// where the "path" is maintained as a stack.
+	expect = []*IdentExpect{
+		{Name: "cycle"},
+
+		//
+		// type A struct {
+		//
+		aDecl().
+			AddType(CycleOf(aDecl())). // depends on itself due to "*A" field
+			AddType(bDecl().
+				AddType(CycleOf(aDecl())).
+				AddType(CycleOf(bDecl())).
+				AddType(cDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				),
+			).
+			AddType(cDecl().
+				AddType(CycleOf(aDecl())).
+				AddType(bDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				).
+				AddType(CycleOf(cDecl())),
+			),
+
+		//
+		//   *A
+		//
+		aRef().AddType(aDecl().
+			AddType(CycleOf(aDecl())).
+			AddType(bDecl().
+				AddType(CycleOf(aDecl())).
+				AddType(CycleOf(bDecl())).
+				AddType(cDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				),
+			).
+			AddType(cDecl().
+				AddType(CycleOf(aDecl())).
+				AddType(bDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				).
+				AddType(CycleOf(cDecl())),
+			),
+		),
+
+		//
+		//   *B
+		//
+		bRef().
+			AddType(bDecl().
+				AddType(aDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(cDecl().
+						AddType(CycleOf(aDecl())).
+						AddType(CycleOf(bDecl())).
+						AddType(CycleOf(cDecl())),
+					),
+				).
+				AddType(CycleOf(bDecl())).
+				AddType(cDecl().
+					AddType(aDecl().
+						AddType(CycleOf(aDecl())).
+						AddType(CycleOf(bDecl())).
+						AddType(CycleOf(cDecl())),
+					).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				),
+			),
+
+		//
+		//   *C
+		//
+		cRef().
+			AddType(cDecl().
+				AddType(aDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(bDecl().
+						AddType(CycleOf(aDecl())).
+						AddType(CycleOf(bDecl())).
+						AddType(CycleOf(cDecl())),
+					).
+					AddType(CycleOf(cDecl())),
+				).
+				AddType(bDecl().
+					AddType(aDecl().
+						AddType(CycleOf(aDecl())).
+						AddType(CycleOf(bDecl())).
+						AddType(CycleOf(cDecl())),
+					).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				).
+				AddType(CycleOf(cDecl())),
+			),
+
+		//
+		// }
+		//
+
+		//
+		// type B struct {
+		//
+		bDecl().
+			AddType(aDecl().
+				AddType(CycleOf(aDecl())).
+				AddType(CycleOf(bDecl())).
+				AddType(cDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				),
+			).
+			AddType(CycleOf(bDecl())). // depends on itself due to "*B" field
+			AddType(cDecl().
+				AddType(aDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				).
+				AddType(CycleOf(bDecl())).
+				AddType(CycleOf(cDecl())),
+			),
+
+		//
+		//   *A
+		//
+		aRef().
+			AddType(aDecl().
+				AddType(CycleOf(aDecl())).
+				AddType(bDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(cDecl().
+						AddType(CycleOf(aDecl())).
+						AddType(CycleOf(bDecl())).
+						AddType(CycleOf(cDecl())),
+					),
+				).
+				AddType(cDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(bDecl().
+						AddType(CycleOf(aDecl())).
+						AddType(CycleOf(bDecl())).
+						AddType(CycleOf(cDecl())),
+					).
+					AddType(CycleOf(cDecl())),
+				),
+			),
+
+		//
+		//   *B
+		//
+		bRef().AddType(bDecl().
+			AddType(aDecl().
+				AddType(CycleOf(aDecl())).
+				AddType(CycleOf(bDecl())).
+				AddType(cDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				),
+			).
+			AddType(CycleOf(bDecl())).
+			AddType(cDecl().
+				AddType(aDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				).
+				AddType(CycleOf(bDecl())).
+				AddType(CycleOf(cDecl())),
+			),
+		),
+
+		//
+		//   *C
+		//
+		cRef().
+			AddType(cDecl().
+				AddType(aDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(bDecl().
+						AddType(CycleOf(aDecl())).
+						AddType(CycleOf(bDecl())).
+						AddType(CycleOf(cDecl())),
+					).
+					AddType(CycleOf(cDecl())),
+				).
+				AddType(bDecl().
+					AddType(aDecl().
+						AddType(CycleOf(aDecl())).
+						AddType(CycleOf(bDecl())).
+						AddType(CycleOf(cDecl())),
+					).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				).
+				AddType(CycleOf(cDecl())),
+			),
+
+		//
+		// }
+		//
+
+		//
+		// type C struct {
+		//
+		cDecl().
+			AddType(aDecl().
+				AddType(CycleOf(aDecl())).
+				AddType(bDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				).
+				AddType(CycleOf(cDecl())),
+			).
+			AddType(bDecl().
+				AddType(
+					aDecl().
+						AddType(CycleOf(aDecl())).
+						AddType(CycleOf(bDecl())).
+						AddType(CycleOf(cDecl())),
+				).
+				AddType(CycleOf(bDecl())).
+				AddType(CycleOf(cDecl())),
+			).
+			AddType(CycleOf(cDecl())), // depends on itself due to "*C" field
+
+		//
+		//   *A
+		//
+		aRef().AddType(aDecl().
+			AddType(CycleOf(aDecl())).
+			AddType(bDecl().
+				AddType(CycleOf(aDecl())).
+				AddType(CycleOf(bDecl())).
+				AddType(cDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				),
+			).
+			AddType(cDecl().
+				AddType(CycleOf(aDecl())).
+				AddType(bDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				).
+				AddType(CycleOf(cDecl())),
+			),
+		),
+
+		//
+		//   *B
+		//
+		bRef().AddType(bDecl().
+			AddType(aDecl().
+				AddType(CycleOf(aDecl())).
+				AddType(CycleOf(bDecl())).
+				AddType(cDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				),
+			).
+			AddType(CycleOf(bDecl())).
+			AddType(cDecl().
+				AddType(aDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				).
+				AddType(CycleOf(bDecl())).
+				AddType(CycleOf(cDecl())),
+			),
+		),
+
+		//
+		//   *C
+		//
+		cRef().AddType(cDecl().
+			AddType(aDecl().
+				AddType(CycleOf(aDecl())).
+				AddType(bDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				).
+				AddType(CycleOf(cDecl())),
+			).
+			AddType(bDecl().
+				AddType(aDecl().
+					AddType(CycleOf(aDecl())).
+					AddType(CycleOf(bDecl())).
+					AddType(CycleOf(cDecl())),
+				).
+				AddType(CycleOf(bDecl())).
+				AddType(CycleOf(cDecl())),
+			).
+			AddType(CycleOf(cDecl())),
+		),
+
+		//
+		// }
+		//
+	}
+	s.requireFileIdentInfo(i, cycleFilename, expect)
 }

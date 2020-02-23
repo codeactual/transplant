@@ -13,5 +13,12 @@ import (
 )
 
 func ShortPositionString(p std_token.Position) string {
-	return fmt.Sprintf("%s L%d C%d", filepath.Base(p.Filename), p.Line, p.Column)
+	s := filepath.Base(p.Filename)
+	if p.Line > 0 {
+		s += fmt.Sprintf(" L%d", p.Line)
+	}
+	if p.Column > 0 {
+		s += fmt.Sprintf(" C%d", p.Column)
+	}
+	return s
 }

@@ -26,7 +26,6 @@ const (
 type CustomExportedStruct0 struct {
 	ExportedStruct0
 	Field0 ExportedStruct1
-	Next   *CustomExportedStruct0
 }
 
 func (recv CustomExportedStruct0) Method0(p0 DefinedInt) (r0 AliasedInt) {

@@ -8,13 +8,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/codeactual/transplant/internal/ldflags"
 	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/codeactual/transplant/cmd/transplant/egress"
 	"github.com/codeactual/transplant/cmd/transplant/ingress"
+	"github.com/codeactual/transplant/internal/cage/cli/handler"
 )
 
 func main() {
@@ -23,9 +23,9 @@ func main() {
 		Short: "Copy a Go project between a origin module and standalone module",
 	}
 
-	rootCmd.Version = ldflags.Version
-	rootCmd.AddCommand(egress.New())
-	rootCmd.AddCommand(ingress.New())
+	rootCmd.Version = handler.Version()
+	rootCmd.AddCommand(egress.NewCommand())
+	rootCmd.AddCommand(ingress.NewCommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

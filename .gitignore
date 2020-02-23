@@ -1,7 +1,5 @@
-**/testdata/dynamic
 **/testdata/cover/*.html
 **/testdata/dynamic
 *.log
 /build
-core
 cover.out

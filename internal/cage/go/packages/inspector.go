@@ -345,7 +345,7 @@ type Inspector struct {
 	// globalImportPaths is the cache for the GlobalImportPaths method.
 	globalImportPaths map[*ast.File][]string
 
-	// globalRefs is the cache for the FindGlobalRef method.
+	// globalRefs is the cache for the ResolveGlobalRef method.
 	globalRefs map[*ast.Ident]*GlobalRef
 
 	// identContexts is the cache for the IdentContext method.

@@ -13,12 +13,12 @@ import (
 	"github.com/codeactual/transplant/cmd/transplant/ingress/why"
 )
 
-func New() *cobra.Command {
+func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "import",
 		Short: "Commands copying a project from an egress-generated copy back to its origin",
 	}
-	cmd.AddCommand(run.New())
-	cmd.AddCommand(why.New())
+	cmd.AddCommand(run.NewCommand())
+	cmd.AddCommand(why.NewCommand())
 	return cmd
 }

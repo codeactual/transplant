@@ -34,7 +34,7 @@ const (
 )
 
 type Mixin struct {
-	handler.IO
+	handler.DefaultSession
 
 	*std_zap.Logger
 

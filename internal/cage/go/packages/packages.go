@@ -26,8 +26,6 @@ import (
 
 const (
 	// LoadSyntax approximates the deprecated tools/go/packages.LoadSyntax mode.
-	//
-	// - NeedDeps is required unless https://github.com/golang/tools/pull/139/files is accepted.
 	LoadSyntax = std_packages.NeedName |
 		std_packages.NeedFiles |
 		std_packages.NeedImports |
@@ -334,4 +332,26 @@ func LoadModeString(m std_packages.LoadMode) string {
 	}
 
 	return strings.Join(needs, "|")
+}
+
+// DirImportPath returns the package dir's import path based on its relative location to the module root.
+func DirImportPath(modImportPath, modRootDir, pkgDir string) (importPath string, _ error) {
+	if err := cage_filepath.Abs(&modRootDir); err != nil {
+		return "", errors.WithStack(err)
+	}
+	if err := cage_filepath.Abs(&pkgDir); err != nil {
+		return "", errors.WithStack(err)
+	}
+
+	if modRootDir == pkgDir {
+		importPath = modImportPath
+	} else {
+		relPath, err := filepath.Rel(modRootDir, pkgDir)
+		if err != nil {
+			return "", errors.Wrapf(err, "failed to get relative path from [%s] to [%s]", modRootDir, pkgDir)
+		}
+		importPath = modImportPath + "/" + strings.Join(strings.Split(relPath, string(filepath.Separator)), "/")
+	}
+
+	return importPath, nil
 }

@@ -1,4 +1,4 @@
-# transplant [![GoDoc](https://godoc.org/github.com/codeactual/transplant?status.svg)](https://godoc.org/github.com/codeactual/transplant) [![Go Report Card](https://goreportcard.com/badge/github.com/codeactual/transplant)](https://goreportcard.com/report/github.com/codeactual/transplant) [![Build Status](https://travis-ci.org/codeactual/transplant.png)](https://travis-ci.org/codeactual/transplant)
+# transplant [![GoDoc](https://godoc.org/github.com/codeactual/transplant?status.svg)](https://pkg.go.dev/mod/github.com/codeactual/transplant) [![Go Report Card](https://goreportcard.com/badge/github.com/codeactual/transplant)](https://goreportcard.com/report/github.com/codeactual/transplant) [![Build Status](https://travis-ci.org/codeactual/transplant.png)](https://travis-ci.org/codeactual/transplant)
 
 transplant exports a Go project out of a multi-project module into a standalone module.
 
@@ -32,7 +32,7 @@ The above degree of parameterization is optional and all values can be self-cont
 # Documentation
 
 - [Topics](doc/README.md)
-- [GoDoc](https://godoc.org/github.com/codeactual/transplant/internal/transplant)
+- [GoDoc](https://pkg.go.dev/mod/github.com/codeactual/transplant/internal/transplant)
 
 # Installation
 

@@ -13,6 +13,7 @@ import (
 	"go/printer"
 	"go/token"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/davecgh/go-spew/spew"
@@ -39,6 +40,20 @@ func FileSetNodeToString(fset *token.FileSet, n std_ast.Node) string {
 	} else {
 		return fmt.Sprintf("%s: %s", fset.Position(n.Pos()), s)
 	}
+}
+
+func FileSetNodeToStringShort(fset *token.FileSet, n std_ast.Node) string {
+	s := nodeToString(n)
+
+	if strings.Count(s, "\n") > 0 {
+		return fmt.Sprintf("\n------\n%s\n%s\n------", PositionStringShort(fset.Position(n.Pos())), s)
+	} else {
+		return fmt.Sprintf("%s: %s", PositionStringShort(fset.Position(n.Pos())), s)
+	}
+}
+
+func PositionStringShort(p token.Position) string {
+	return fmt.Sprintf("%s:%d:%d", filepath.Base(p.Filename), p.Line, p.Column)
 }
 
 // IsGlobalDeclName returns true if a const/function/type/var's name matches the input.

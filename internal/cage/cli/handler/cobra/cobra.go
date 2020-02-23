@@ -8,13 +8,13 @@ package cobra
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/pkg/errors"
 	std_cobra "github.com/spf13/cobra"
 
 	"github.com/codeactual/transplant/internal/cage/cli/handler"
-	"github.com/codeactual/transplant/internal/ldflags"
 )
 
 type Init struct {
@@ -37,16 +37,16 @@ type Init struct {
 // * Minimize boilerplate in sub-command packages.
 // * Remove cobra knowledge from all Run methods for testability.
 type Handler interface {
-	handler.Responder
+	handler.Session
 
 	// BindFlags optionally defines CLI flags.
-	BindFlags(cmd *std_cobra.Command) (requiredFlags []string)
+	BindFlags(*std_cobra.Command) (requiredFlags []string)
 
 	// Init defines the cobra command object, prefix for environment variable configs, etc.
 	Init() Init
 
 	// Run is called when all bound flags are available.
-	Run(ctx context.Context, args []string)
+	Run(context.Context, handler.Input)
 }
 
 // NewCommand accepts an initial command object, created in a sub-commands Init method,
@@ -68,8 +68,17 @@ func NewCommand(h Handler, init Init) *std_cobra.Command {
 	config.Init(init.EnvPrefix, init.Cmd)
 
 	init.Cmd.PreRunE = func(cmd *std_cobra.Command, args []string) error {
-		if err := config.PreRun(); err != nil {
-			return errors.Wrap(err, "failed to configure the command")
+		// Allow Config.PreRun to indicate when the error should be propagated or handled by
+		// simply printing the usage content. This retains compatibility with
+		// programs whose main function panics on the root command's Execute call,
+		// but avoids panics when the cause appears to be invalid user input.
+		if showUsage, err := config.PreRun(); err != nil {
+			if showUsage {
+				fmt.Fprintln(h.Err(), cmd.UsageString()+"\n"+err.Error())
+				os.Exit(1)
+			} else {
+				return errors.Wrap(err, "failed to configure the command")
+			}
 		}
 
 		for _, mixin := range init.Mixins {
@@ -91,7 +100,27 @@ func NewCommand(h Handler, init Init) *std_cobra.Command {
 
 	// Define a thin adapter to allow Run methods to have no knowledge of cobra.
 	init.Cmd.Run = func(cmd *std_cobra.Command, args []string) {
-		h.Run(init.Ctx, args)
+		input := handler.Input{
+			Args: args,
+		}
+
+		argsLenAtDash := cmd.ArgsLenAtDash() // -1 if dash not present
+
+		if argsLenAtDash == 0 {
+			input.ArgsAfterDash = make([]string, len(args)-argsLenAtDash)
+			copy(input.ArgsAfterDash, args[argsLenAtDash:])
+		} else if argsLenAtDash == -1 {
+			input.ArgsBeforeDash = make([]string, len(args))
+			copy(input.ArgsBeforeDash, args)
+		} else {
+			input.ArgsBeforeDash = make([]string, argsLenAtDash)
+			copy(input.ArgsBeforeDash, args[:argsLenAtDash])
+
+			input.ArgsAfterDash = make([]string, len(args)-argsLenAtDash)
+			copy(input.ArgsAfterDash, args[argsLenAtDash:])
+		}
+
+		h.Run(init.Ctx, input)
 	}
 
 	init.Cmd.PostRun = func(cmd *std_cobra.Command, args []string) {
@@ -111,13 +140,14 @@ func NewCommand(h Handler, init Init) *std_cobra.Command {
 	for _, mixin := range init.Mixins {
 		requiredFlags = append(requiredFlags, mixin.BindCobraFlags(init.Cmd)...)
 
-		if m, ok := mixin.(handler.Responder); ok {
+		if m, ok := mixin.(handler.Session); ok {
 			if m.Out() == nil {
 				m.SetOut(os.Stdout)
 			}
 			if m.Err() == nil {
 				m.SetErr(os.Stderr)
 			}
+
 			// m.SetIn is not called for the same reason handler.SetIn is not called below.
 			// See the comments about the latter.
 		}
@@ -127,6 +157,21 @@ func NewCommand(h Handler, init Init) *std_cobra.Command {
 	config.BindEnvToAllFlags(init.Cmd)
 
 	config.SetRequired(requiredFlags...)
+
+	// Ideally we would use a SetUsageString but SetUsageTemplate has the same effect in this case.
+	usageTmpl := init.Cmd.UsageString()
+	if init.Cmd.HasAvailableFlags() {
+		usageTmpl += fmt.Sprintf("\nSet flags via command line or environment variable (%s_KEY_NAME).\n", init.EnvPrefix)
+
+		reqKeys := config.MissingRequiredKeyStrings()
+		if len(reqKeys) > 0 {
+			usageTmpl += "\n" + "Required:"
+			for _, s := range reqKeys {
+				usageTmpl += "\n\t" + s
+			}
+		}
+	}
+	init.Cmd.SetUsageTemplate(usageTmpl + "\n")
 
 	// Don't always display the error returned by handler.Run and the usage info.
 	// Let handlers/mixins control that class of output.
@@ -151,7 +196,7 @@ func NewHandler(h Handler) *std_cobra.Command {
 		init.Ctx = context.Background()
 	}
 	if init.Cmd.Version == "" {
-		init.Cmd.Version = ldflags.Version
+		init.Cmd.Version = handler.Version()
 	}
 	return NewCommand(h, init)
 }

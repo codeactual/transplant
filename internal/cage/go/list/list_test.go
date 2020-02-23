@@ -9,6 +9,7 @@ package list_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -126,4 +127,49 @@ func (s *ListSuite) TestAllModules() {
 		},
 		*mods.GetByPath("github.com/pkg/errors"),
 	)
+}
+
+func (s *ListSuite) TestResolveDir() {
+	t := s.T()
+	ctx := context.Background()
+	_, fixtureBasePath := cage_testkit_file.FixturePath(t, "resolve_dir")
+
+	cases := []struct {
+		Input  string
+		Expect cage_go_list.Dir
+	}{
+		{
+			Input: fixtureBasePath,
+			Expect: cage_go_list.Dir{
+				FilePath:          fixtureBasePath,
+				ImportPath:        "resolve_dir",
+				ModRootDir:        fixtureBasePath,
+				ModRootImportPath: "resolve_dir",
+			},
+		},
+		{
+			Input: filepath.Join(fixtureBasePath, "subpkg0"),
+			Expect: cage_go_list.Dir{
+				FilePath:          filepath.Join(fixtureBasePath, "subpkg0"),
+				ImportPath:        "resolve_dir/subpkg0",
+				ModRootDir:        fixtureBasePath,
+				ModRootImportPath: "resolve_dir",
+			},
+		},
+		{
+			Input: filepath.Join(fixtureBasePath, "subpkg0", "subpkg1"),
+			Expect: cage_go_list.Dir{
+				FilePath:          filepath.Join(fixtureBasePath, "subpkg0", "subpkg1"),
+				ImportPath:        "resolve_dir/subpkg0/subpkg1",
+				ModRootDir:        fixtureBasePath,
+				ModRootImportPath: "resolve_dir",
+			},
+		},
+	}
+
+	for _, c := range cases {
+		actual, err := cage_go_list.ResolveDir(ctx, c.Input)
+		require.NoError(t, err)
+		require.Exactly(t, c.Expect, *actual)
+	}
 }

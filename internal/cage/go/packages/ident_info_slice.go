@@ -26,3 +26,9 @@ func (t *IdentInfoSlice) Less(i, j int) bool {
 func (t *IdentInfoSlice) Len() int {
 	return len(*t)
 }
+
+func (t *IdentInfoSlice) Copy() IdentInfoSlice {
+	c := make([]*IdentInfo, len(*t))
+	copy(c, (*t)[:])
+	return c
+}

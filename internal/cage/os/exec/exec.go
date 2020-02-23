@@ -5,6 +5,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //go:generate mockery -all
+//go:generate mockgen -copyright_file=$LICENSE_HEADER -package=mock -destination=$GODIR/mock/exec.go -source=$GODIR/$GOFILE
 package exec
 
 import (
@@ -138,20 +139,19 @@ func (c CommonExecutor) CommandContext(ctx context.Context, name string, arg ...
 //
 // It implements an Executor behavior.
 func (c CommonExecutor) Buffered(ctx context.Context, cmds ...*std_exec.Cmd) (stdout *bytes.Buffer, stderr *bytes.Buffer, res PipelineResult, err error) {
-	stdout = new(bytes.Buffer)
-
-	// Use a goroutine-safe version because all commands in the pipeline will write to it.
+	// Use a goroutine-safe versions because all commands in the pipeline will write to them.
+	sharedStdout := tp_bytes.NewSharedBuffer()
 	sharedStderr := tp_bytes.NewSharedBuffer()
 
 	out, err := c.execute(executeInput{
 		ctx:    ctx,
-		stdout: stdout,
+		stdout: sharedStdout,
 		stderr: sharedStderr,
 		stdin:  nil,
 		cmds:   cmds,
 	})
 
-	return stdout, sharedStderr.Unshared(), out.pipelineResult, errors.WithStack(err)
+	return sharedStdout.Unshared(), sharedStderr.Unshared(), out.pipelineResult, errors.WithStack(err)
 }
 
 // Standard allows standard in, out, and error to be customized.

@@ -15,9 +15,26 @@ import (
 
 	"github.com/pkg/errors"
 
+	cage_pkgs "github.com/codeactual/transplant/internal/cage/go/packages"
 	cage_exec "github.com/codeactual/transplant/internal/cage/os/exec"
+	cage_filepath "github.com/codeactual/transplant/internal/cage/path/filepath"
 	cage_strings "github.com/codeactual/transplant/internal/cage/strings"
 )
+
+// Dir holds package/module details about a file directory.
+type Dir struct {
+	// FilePath is the absolute path to the subject dir.
+	FilePath string
+
+	// ImportPath is the path required to import the package in the subject dir.
+	ImportPath string
+
+	// ModRootDir is the absolute path to the root dir of the module which includes the subject dir.
+	ModRootDir string
+
+	// ModRootImportPath is the path selected in the module's go.mod.
+	ModRootImportPath string
+}
 
 // Module holds the per-module fields unmarshaled from "go list" output.
 type Module struct {
@@ -131,4 +148,49 @@ func (q *Query) Run(ctx context.Context) (mods *ModuleSet, err error) {
 	}
 
 	return mods, nil
+}
+
+// ResolveDir returns the module root dir and import path of the input dir.
+func ResolveDir(ctx context.Context, dir string) (*Dir, error) {
+	if err := cage_filepath.Abs(&dir); err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	args := []string{"list", "-m", "-f", "{{.Path}} {{.Dir}}"}
+
+	cmd := exec.CommandContext(ctx, "go", args...)
+	cmd.Env = append(os.Environ(), "GO111MODULE=on")
+	cmd.Dir = dir
+	stdout, stderr, _, err := cage_exec.CommonExecutor{}.Buffered(ctx, cmd)
+
+	ctxErr := ctx.Err()
+	if ctxErr != nil {
+		err = ctxErr
+	}
+
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get import path of dir [%s]: %s", dir, stderr.String())
+	}
+
+	stdoutParts := strings.Split(strings.TrimSpace(stdout.String()), " ")
+	if len(stdoutParts) != 2 {
+		return nil, errors.Errorf("failed to parse 'go list' output [%s]", stdout.String())
+	}
+
+	modRootImportPath := stdoutParts[0]
+	modRootDir := stdoutParts[1]
+
+	importPath, err := cage_pkgs.DirImportPath(modRootImportPath, modRootDir, dir)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	d := Dir{
+		FilePath:          dir,
+		ImportPath:        importPath,
+		ModRootImportPath: modRootImportPath,
+		ModRootDir:        modRootDir,
+	}
+
+	return &d, nil
 }

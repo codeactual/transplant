@@ -174,7 +174,7 @@ func (i *Inspector) findIdsUsedByNode(node ast.Node) (used []IdUsedByNode, errs 
 				})
 
 				// Register the type dependencies.
-				for _, usedType := range identInfo.GlobalRef.TypesSet() {
+				for _, usedType := range identInfo.GlobalRef.UniqueTypes() {
 					used = append(used, IdUsedByNode{
 						IdentInfo: usedType,
 						Name:      usedType.Name,

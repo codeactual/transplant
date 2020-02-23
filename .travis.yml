@@ -25,7 +25,7 @@ script:
   - cd $HOME/go_get_test
   - go mod init go_get_test
   - 'go get -v github.com/codeactual/transplant/cmd/transplant@${TRAVIS_COMMIT}'
-  - transplant --help
+  - transplant --version
   # Attempt to invalidate Github's cached badge images
   - curl --silent --output hub-purge.sh https://raw.githubusercontent.com/codeactual/hub-purge/master/hub-purge.sh
   - chmod +x ./hub-purge.sh

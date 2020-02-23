@@ -24,7 +24,7 @@ import (
 )
 
 type Mixin struct {
-	handler.IO
+	handler.DefaultSession
 
 	CpuFile string `usage:"File to receive pprof CPU profile"`
 	MemFile string `usage:"File to receive pprof memory profile"`

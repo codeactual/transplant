@@ -17,6 +17,7 @@ github.com/codeactual/transplant/internal/cage/go/list/list.go				GetPaths				10
 github.com/codeactual/transplant/internal/cage/go/list/list.go				Modules					100.0%
 github.com/codeactual/transplant/internal/cage/go/list/list.go				NewModuleSet				100.0%
 github.com/codeactual/transplant/internal/cage/go/list/list.go				NewQuery				100.0%
+github.com/codeactual/transplant/internal/cage/go/list/list.go				ResolveDir				77.3%
 github.com/codeactual/transplant/internal/cage/go/list/list.go				Run					90.0%
 github.com/codeactual/transplant/internal/cage/go/mod/mod.go				CompareSum				85.7%
 github.com/codeactual/transplant/internal/cage/go/mod/mod.go				DelRequire				0.0%
@@ -61,13 +62,17 @@ github.com/codeactual/transplant/internal/cage/go/packages/global_id_list.go		Le
 github.com/codeactual/transplant/internal/cage/go/packages/global_id_list.go		NewGlobalIdList				0.0%
 github.com/codeactual/transplant/internal/cage/go/packages/global_id_list.go		SortedSlice				0.0%
 github.com/codeactual/transplant/internal/cage/go/packages/global_id_list.go		Swap					0.0%
+github.com/codeactual/transplant/internal/cage/go/packages/global_ref.go			ResolveGlobalRef			97.7%
 github.com/codeactual/transplant/internal/cage/go/packages/ident_context.go			NewIdentContext				100.0%
 github.com/codeactual/transplant/internal/cage/go/packages/ident_decl.go			NewIdentDecl				100.0%
-github.com/codeactual/transplant/internal/cage/go/packages/ident_info.go			Id					100.0%
-github.com/codeactual/transplant/internal/cage/go/packages/ident_info.go			InspectTypes				100.0%
-github.com/codeactual/transplant/internal/cage/go/packages/ident_info.go			NewIdentInfo				87.5%
-github.com/codeactual/transplant/internal/cage/go/packages/ident_info.go			TypesSet				100.0%
+github.com/codeactual/transplant/internal/cage/go/packages/ident_info.go			Id					0.0%
+github.com/codeactual/transplant/internal/cage/go/packages/ident_info.go			IdShort					100.0%
+github.com/codeactual/transplant/internal/cage/go/packages/ident_info.go			InspectTypes				93.8%
+github.com/codeactual/transplant/internal/cage/go/packages/ident_info.go			NewIdentInfo				86.6%
+github.com/codeactual/transplant/internal/cage/go/packages/ident_info.go			NewIdentInfoCycle			100.0%
 github.com/codeactual/transplant/internal/cage/go/packages/ident_info.go			TypesString				100.0%
+github.com/codeactual/transplant/internal/cage/go/packages/ident_info.go			UniqueTypes				88.9%
+github.com/codeactual/transplant/internal/cage/go/packages/ident_info_slice.go		Copy					100.0%
 github.com/codeactual/transplant/internal/cage/go/packages/ident_info_slice.go		Len					100.0%
 github.com/codeactual/transplant/internal/cage/go/packages/ident_info_slice.go		Less					60.0%
 github.com/codeactual/transplant/internal/cage/go/packages/ident_info_slice.go		Swap					100.0%
@@ -94,7 +99,6 @@ github.com/codeactual/transplant/internal/cage/go/packages/inspector_find.go		Do
 github.com/codeactual/transplant/internal/cage/go/packages/inspector_find.go		FindAstNode				83.3%
 github.com/codeactual/transplant/internal/cage/go/packages/inspector_find.go		FindGenDeclIdent			73.9%
 github.com/codeactual/transplant/internal/cage/go/packages/inspector_find.go		FindGlobalInAstNode			85.0%
-github.com/codeactual/transplant/internal/cage/go/packages/inspector_find.go		FindGlobalRef				97.9%
 github.com/codeactual/transplant/internal/cage/go/packages/inspector_find.go		FindPkgGlobal				86.4%
 github.com/codeactual/transplant/internal/cage/go/packages/inspector_find.go		FindPos					66.7%
 github.com/codeactual/transplant/internal/cage/go/packages/inspector_find.go		GlobalIdNode				70.0%
@@ -133,6 +137,7 @@ github.com/codeactual/transplant/internal/cage/go/packages/inspector.go			Sorted
 github.com/codeactual/transplant/internal/cage/go/packages/inspector.go			SortedPkgNames				0.0%
 github.com/codeactual/transplant/internal/cage/go/packages/node_inspect_info.go		NewNodeInspectInfo			100.0%
 github.com/codeactual/transplant/internal/cage/go/packages/packages.go			Copy					100.0%
+github.com/codeactual/transplant/internal/cage/go/packages/packages.go			DirImportPath				0.0%
 github.com/codeactual/transplant/internal/cage/go/packages/packages.go			IdentTypesObj				100.0%
 github.com/codeactual/transplant/internal/cage/go/packages/packages.go			LoadModeString				0.0%
 github.com/codeactual/transplant/internal/cage/go/packages/packages.go			LoadWithConfig				80.9%
@@ -216,6 +221,11 @@ github.com/codeactual/transplant/internal/cage/strings/set.go				Remove					0.0%
 github.com/codeactual/transplant/internal/cage/strings/set.go				Slice					0.0%
 github.com/codeactual/transplant/internal/cage/strings/set.go				SortedReverseSlice			0.0%
 github.com/codeactual/transplant/internal/cage/strings/set.go				SortedSlice				0.0%
+github.com/codeactual/transplant/internal/cage/strings/stack.go				Contains				0.0%
+github.com/codeactual/transplant/internal/cage/strings/stack.go				Items					0.0%
+github.com/codeactual/transplant/internal/cage/strings/stack.go				NewStack				0.0%
+github.com/codeactual/transplant/internal/cage/strings/stack.go				Pop					0.0%
+github.com/codeactual/transplant/internal/cage/strings/stack.go				Push					0.0%
 github.com/codeactual/transplant/internal/cage/strings/strings.go				Copy					100.0%
 github.com/codeactual/transplant/internal/cage/strings/strings.go				SliceOfSlice				0.0%
 github.com/codeactual/transplant/internal/cage/strings/strings.go				SortReverseStable			100.0%
@@ -315,4 +325,4 @@ github.com/codeactual/transplant/internal/transplant/transplant.go				ReadFile		
 github.com/codeactual/transplant/internal/transplant/transplant.go				ResolveTo				100.0%
 github.com/codeactual/transplant/internal/transplant/transplant.go				ToAbs					100.0%
 github.com/codeactual/transplant/internal/transplant/transplant.go				Validate				71.4%
-76.3%
+75.4%

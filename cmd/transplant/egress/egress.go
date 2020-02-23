@@ -13,12 +13,12 @@ import (
 	"github.com/codeactual/transplant/cmd/transplant/egress/why"
 )
 
-func New() *cobra.Command {
+func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "export",
 		Short: "Commands for copying a project from the origin module to a standalone module",
 	}
-	cmd.AddCommand(run.New())
-	cmd.AddCommand(why.New())
+	cmd.AddCommand(run.NewCommand())
+	cmd.AddCommand(why.NewCommand())
 	return cmd
 }

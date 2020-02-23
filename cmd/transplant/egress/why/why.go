@@ -9,6 +9,7 @@ package why
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -28,7 +29,7 @@ const exampleText = "file /path/to/file"
 
 // Handler defines the sub-command flags and logic.
 type Handler struct {
-	handler.IO
+	handler.Session
 
 	ConfigFile string `usage:"YAML configuration file"`
 	Op         string `usage:"Ops.Id value from the config file"`
@@ -69,13 +70,14 @@ func (h *Handler) BindFlags(cmd *cobra.Command) []string {
 // Run performs the sub-command logic.
 //
 // It implements cli/handler/cobra.Handler.
-func (h *Handler) Run(ctx context.Context, args []string) {
+func (h *Handler) Run(ctx context.Context, input handler.Input) {
 	errs := h.config.ReadFile(h.ConfigFile, h.Op)
 	errsLen := len(errs)
 	if errsLen > 0 {
+		errs = append(errs, errors.Errorf("config file contains %d issue(s), canceled [%s] operation", errsLen, h.Op))
 		cage_errors.WriteErrList(h.Err(), errs...)
 		h.Log.ErrToFile(errs...)
-		h.Log.ExitOnErr(1, errors.Errorf("config file contains %d issue(s), canceled [%s] operation", errsLen, h.Op))
+		os.Exit(1)
 	}
 
 	if len(h.config.Ops) == 0 {
@@ -94,11 +96,11 @@ func (h *Handler) Run(ctx context.Context, args []string) {
 		return
 	}
 
-	if args[0] == "" {
-		h.Exit(1, "missing argument, example: "+exampleText)
+	if input.Args[0] == "" {
+		h.Exitf(1, "missing argument, example: "+exampleText)
 	}
 
-	if absErr := cage_filepath.Abs(&args[0]); absErr != nil {
+	if absErr := cage_filepath.Abs(&input.Args[0]); absErr != nil {
 		h.Log.ExitOnErr(1, absErr)
 	}
 
@@ -133,14 +135,16 @@ func (h *Handler) Run(ctx context.Context, args []string) {
 	}
 	h.Log.ExitOnErr(1, errs...)
 
-	why.PrintLog(h.Out(), whyLog, args[0])
+	why.PrintLog(h.Out(), whyLog, input.Args[0])
 
 	h.Log.ExitOnErr(1, cage_file.RemoveAllSafer(plan.StagePath))
 }
 
 // New returns a cobra command instance based on Handler.
-func New() *cobra.Command {
-	return handler_cobra.NewHandler(&Handler{})
+func NewCommand() *cobra.Command {
+	return handler_cobra.NewHandler(&Handler{
+		Session: &handler.DefaultSession{},
+	})
 }
 
 var _ handler_cobra.Handler = (*Handler)(nil)

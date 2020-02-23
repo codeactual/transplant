@@ -33,7 +33,6 @@ const DefinedIntIota0Copy = other_pkg0.DefinedIntIota0
 type CustomExportedStruct0 struct {
 	other_pkg0.ExportedStruct0
 	Field0 other_pkg0.ExportedStruct1
-	Next   *CustomExportedStruct0
 }
 
 func (recv CustomExportedStruct0) Method0(p0 other_pkg0.DefinedInt) (r0 other_pkg0.AliasedInt) {

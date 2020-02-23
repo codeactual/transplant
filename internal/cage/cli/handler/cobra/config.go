@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/viper"
 
 	cage_viper "github.com/codeactual/transplant/internal/cage/config/viper"
+	cage_strings "github.com/codeactual/transplant/internal/cage/strings"
 )
 
 // Config provides viper integration and enforces prefixed environment
@@ -77,21 +78,44 @@ func (c *Config) SetRequired(keys ...string) {
 //
 // It returns an error if any config is missing from both flags and environment.
 // The error string contains a list of all missing config keys.
-func (c *Config) PreRun() error {
+func (c *Config) PreRun() (showUsage bool, _ error) {
 	if err := tp_viper.MergeConfig(c.cmd.Flags(), c.Viper); err != nil {
-		return errors.WithStack(err)
+		return false, errors.WithStack(err)
 	}
 
-	var missing []string
-	for key := range c.requiredKeys {
-		if !cage_viper.IsSetInCommand(c.Viper, c.cmd, c.envPrefix, key) {
-			missing = append(missing, fmt.Sprintf("--%s/%s", key, cage_viper.EnvPrefixedName(c.envPrefix, strings.ToUpper(key))))
-		}
-	}
+	missing := c.MissingRequiredKeyStrings()
 
 	if len(missing) > 0 {
-		return errors.Errorf("missing required configs in flags/environment: %+v", missing)
+		errMsg := "Missing:"
+		for _, s := range missing {
+			errMsg += "\n\t" + s
+		}
+		return true, errors.New(errMsg)
 	}
 
-	return nil
+	return false, nil
+}
+
+// MissingRequiredKeyStrings returns a "--<flag key name>/<env key name>" element for each missing key.
+func (c *Config) MissingRequiredKeyStrings() (missing []string) {
+	for key := range c.requiredKeys {
+		if !cage_viper.IsSetInCommand(c.Viper, c.cmd, c.envPrefix, key) {
+			missing = append(missing, c.KeyUsageString(key))
+		}
+	}
+	cage_strings.SortStable(missing)
+	return missing
+}
+
+// RequiredKeyStrings returns a "--<flag key name>/<env key name>" element for each required key.
+func (c *Config) RequiredKeyStrings() (required []string) {
+	for key := range c.requiredKeys {
+		required = append(required, c.KeyUsageString(key))
+	}
+	cage_strings.SortStable(required)
+	return required
+}
+
+func (c *Config) KeyUsageString(key string) string {
+	return fmt.Sprintf("--%s/%s", key, cage_viper.EnvPrefixedName(c.envPrefix, strings.ToUpper(key)))
 }

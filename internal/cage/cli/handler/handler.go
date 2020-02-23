@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+//go:generate mockgen -copyright_file=$LICENSE_HEADER -package=mock -destination=$GODIR/mock/handler.go -source=$GODIR/$GOFILE
 package handler
 
 import (
@@ -13,11 +14,26 @@ import (
 	"os"
 	"os/signal"
 
-	tp_os "github.com/codeactual/transplant/internal/third_party/stackexchange/os"
-
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+
+	cage_debug "github.com/codeactual/transplant/internal/cage/runtime/debug"
+	"github.com/codeactual/transplant/internal/ldflags"
+	tp_os "github.com/codeactual/transplant/internal/third_party/stackexchange/os"
 )
+
+// Input defines the framework-agnostic user input passed to handler's Run methods.
+type Input struct {
+	// Args holds all unbound arguments except for the first "--" if present.
+	Args []string
+
+	// ArgsBeforeDash holds the subset of Args located before the first "--" if present,
+	// or the same elements as Args if absent.
+	ArgsBeforeDash []string
+
+	// ArgsAfterDash holds the subset of Args located after the first "--" if present.
+	ArgsAfterDash []string
+}
 
 type Mixin interface {
 	// BindCobraFlags gives each mixin the opportunity to define its own flags.
@@ -42,15 +58,12 @@ type PostRun interface {
 	PostRun(ctx context.Context)
 }
 
-// Responder defines the common response behavior expected from each sub-command implementation.
+// Session defines CLI handler behaviors which are useful to replace with test doubles.
 //
 // Behaviors related to terminal I/O are based on the interface approach in docker's CLI:
 //   https://github.com/docker/cli/blob/f1b116179f2a95d0ea45780dfb8be51c2825b9c0/cli/command/cli.go
 //   https://www.apache.org/licenses/LICENSE-2.0.html
-//
-// Specifically, Out and Err methods are intended to improve testability by expecting that terminal
-// messages can be captured for assertions about their content (as they are in docker's own CLI tests).
-type Responder interface {
+type Session interface {
 	// Err returns the standard error destination.
 	Err() io.Writer
 
@@ -72,27 +85,45 @@ type Responder interface {
 
 	// SetOut assigns the standard error destination.
 	SetOut(io.Writer)
+
+	// ExitOnError exits the program if the error is non-nil and prints the error in full format (%+v).
+	ExitOnErr(err error, msg string, code int)
+
+	// ExitOnErrorShort exits the program if the error is non-nil and prints the error's string value.
+	ExitOnErrShort(err error, msg string, code int)
+
+	// ExitOnErrsShort exits the program if the slice is non-empty and prints each error's string value.
+	ExitOnErrsShort(errs []error, code int)
+
+	// Exitf exits the program with a formatted message.
+	Exitf(code int, format string, a ...interface{})
 }
 
-// IO can be embedded in all mixins and sub-command handlers and provide a default implementation
-// of the Responder interface.
-type IO struct {
+// DefaultSession can be embedded in all mixins and sub-command handlers and provide a default implementation
+// of the Session interface which uses os.Stdout, os.Stderr, and os.Stdin by default.
+type DefaultSession struct {
 	err io.Writer
 	out io.Writer
 	in  io.Reader
 }
 
-func (h *IO) Err() io.Writer {
-	return h.err
+func (s *DefaultSession) Err() io.Writer {
+	if s.err == nil {
+		return os.Stderr
+	}
+	return s.err
 }
 
-func (h *IO) Out() io.Writer {
-	return h.out
+func (s *DefaultSession) Out() io.Writer {
+	if s.out == nil {
+		return os.Stdout
+	}
+	return s.out
 }
 
-func (h *IO) In() io.Reader {
-	if h.in != nil && h.in != os.Stdin {
-		return h.in
+func (s *DefaultSession) In() io.Reader {
+	if s.in != nil && s.in != os.Stdin {
+		return s.in
 	}
 
 	pipeStdin, err := tp_os.IsPipeStdin()
@@ -110,29 +141,29 @@ func (h *IO) In() io.Reader {
 	return nil
 }
 
-func (h *IO) SetErr(w io.Writer) {
-	h.err = w
+func (s *DefaultSession) SetErr(w io.Writer) {
+	s.err = w
 }
 
-func (h *IO) SetOut(w io.Writer) {
-	h.out = w
+func (s *DefaultSession) SetOut(w io.Writer) {
+	s.out = w
 }
 
-func (h *IO) SetIn(r io.Reader) {
-	h.in = r
+func (s *DefaultSession) SetIn(r io.Reader) {
+	s.in = r
 }
 
-func (h *IO) OnSignal(s os.Signal, f func(os.Signal)) (cancel func()) {
+func (s *DefaultSession) OnSignal(sig os.Signal, f func(os.Signal)) (cancel func()) {
 	doneCh := make(chan struct{}, 1)
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, s)
+	signal.Notify(sigCh, sig)
 	go func() {
 		for {
 			select {
 			case <-doneCh:
 				return
-			case sig := <-sigCh:
-				f(sig)
+			case received := <-sigCh:
+				f(received)
 			}
 		}
 	}()
@@ -142,31 +173,50 @@ func (h *IO) OnSignal(s os.Signal, f func(os.Signal)) (cancel func()) {
 	}
 }
 
-func (h *IO) ExitOnErr(err error, msg string, code int) {
+func (s *DefaultSession) ExitOnErr(err error, msg string, code int) {
 	if err == nil {
 		return
 	}
-	fmt.Fprintf(os.Stderr, "%s: %+v\n", msg, err)
+
+	if msg == "" {
+		fmt.Fprintln(os.Stderr, err)
+	} else {
+		fmt.Fprintf(os.Stderr, "%s: %+v\n", msg, err)
+	}
+
 	os.Exit(code)
 }
 
-func (h *IO) ExitOnErrShort(err error, msg string, code int) {
+func (s *DefaultSession) ExitOnErrShort(err error, msg string, code int) {
 	if err == nil {
 		return
 	}
-	fmt.Fprintf(os.Stderr, "%s: %s\n", msg, err)
+
+	if msg == "" {
+		fmt.Fprintln(os.Stderr, err)
+	} else {
+		fmt.Fprintf(os.Stderr, "%s: %s\n", msg, err)
+	}
+
 	os.Exit(code)
 }
 
-func (h *IO) ExitOnErrsShort(errs []error, code int) {
+func (s *DefaultSession) ExitOnErrsShort(errs []error, code int) {
 	errsLen := len(errs)
+
+	if errsLen == 0 {
+		return
+	}
+
 	for n, err := range errs {
 		errId := fmt.Sprintf("error %d/%d", n+1, errsLen)
-		fmt.Fprintf(h.Err(), "(%s): %s\n", errId, err.Error())
+		fmt.Fprintf(s.Err(), "(%s): %s\n", errId, err.Error())
 	}
+
+	os.Exit(code)
 }
 
-func (h *IO) Exitf(code int, format string, a ...interface{}) {
+func (s *DefaultSession) Exitf(code int, format string, a ...interface{}) {
 	w := os.Stdout
 	if code != 0 {
 		w = os.Stderr
@@ -175,13 +225,8 @@ func (h *IO) Exitf(code int, format string, a ...interface{}) {
 	os.Exit(code)
 }
 
-func (h *IO) Exit(code int, a ...interface{}) {
-	w := os.Stdout
-	if code != 0 {
-		w = os.Stderr
-	}
-	fmt.Fprintln(w, a...)
-	os.Exit(code)
-}
+var _ Session = (*DefaultSession)(nil)
 
-var _ Responder = (*IO)(nil)
+func Version() string {
+	return ldflags.Version + "\n" + cage_debug.BuildInfoString()
+}
